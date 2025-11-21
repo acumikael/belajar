@@ -192,14 +192,14 @@ local function sendWebhook(dataList, count)
     
     local embedData = {
         {
-            ["title"] = "🌱 Garden Harvest Report",
-            ["description"] = "Batch Target Tercapai!",
+            ["title"] = "Grow a Garden - Egg Notification",
+            ["description"] = "Egg Siap Dibuka!",
             ["color"] = 65280, -- Hijau
             ["fields"] = {
                 { ["name"] = "⏱️ Runtime", ["value"] = runtimeStr, ["inline"] = true },
                 { ["name"] = "🥚 Total Hatched", ["value"] = tostring(totalHatched), ["inline"] = true },
                 { ["name"] = "⚡ Last Batch", ["value"] = lastBatchDuration, ["inline"] = true },
-                { ["name"] = "📦 Isi Batch Ini", ["value"] = contentStr, ["inline"] = false }
+                { ["name"] = "📦 Isi Egg Batch Ini", ["value"] = contentStr, ["inline"] = false }
             },
             ["footer"] = { ["text"] = "Garden Ultimate Script" },
             ["timestamp"] = DateTime.now():ToIsoDate()
