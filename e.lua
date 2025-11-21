@@ -1,139 +1,233 @@
 -- ======================================================
--- TARGETED EGG READER (PATH SPESIFIK)
+-- CONFIGURATION (ISI DISINI)
 -- ======================================================
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1421435065220468779/gnBnih3p73YbLcUggL-fk2HzEKgfTyYPp0UHiinW8J8---3bs_J8WvUymWT2Vgef5_fE" -- Ganti dengan URL Webhook Discord Anda
+local DEFAULT_TARGET = 8 -- Jumlah default target
 
+-- ======================================================
+-- SETUP SERVICES
+-- ======================================================
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
+local HttpService = game:GetService("HttpService")
 
--- 1. HAPUS GUI LAMA
-if player.PlayerGui:FindFirstChild("TargetedEggCounter") then
-    player.PlayerGui.TargetedEggCounter:Destroy()
+-- Fungsi Request (Support Delta/Fluxus/Arceus)
+local request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
+
+-- ======================================================
+-- UI SETUP
+-- ======================================================
+if player.PlayerGui:FindFirstChild("GardenNotifierGui") then
+    player.PlayerGui.GardenNotifierGui:Destroy()
 end
 
--- 2. SETUP GUI (Tampilan Rapi)
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "TargetedEggCounter"
+screenGui.Name = "GardenNotifierGui"
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
-local infoBox = Instance.new("Frame")
-infoBox.Name = "InfoBox"
-infoBox.Parent = screenGui
-infoBox.AnchorPoint = Vector2.new(0.5, 0) 
-infoBox.Position = UDim2.new(0.5, 0, 0.18, 0) -- Posisi di bawah Pet Counter & Tombol
-infoBox.Size = UDim2.new(0, 200, 0, 100)
-infoBox.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
-infoBox.BackgroundTransparency = 0.2
-infoBox.BorderColor3 = Color3.fromRGB(255, 0, 255) -- Border Ungu Neon
-infoBox.BorderSizePixel = 2
+-- FRAME UTAMA
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Parent = screenGui
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.Position = UDim2.new(0.85, 0, 0.5, 0) -- Posisi di Kanan Layar
+mainFrame.Size = UDim2.new(0, 220, 0, 250)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+mainFrame.BorderColor3 = Color3.fromRGB(0, 255, 128)
+mainFrame.BorderSizePixel = 2
+mainFrame.Active = true
+mainFrame.Draggable = true -- Bisa digeser
 
-local title = Instance.new("TextLabel")
-title.Parent = infoBox
-title.Size = UDim2.new(1, 0, 0, 25)
-title.BackgroundTransparency = 1
-title.Text = "ISI KEBUN (DETECTED)"
-title.TextColor3 = Color3.fromRGB(255, 0, 255)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 14
+-- JUDUL
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Parent = mainFrame
+titleLabel.Size = UDim2.new(1, 0, 0, 30)
+titleLabel.BackgroundColor3 = Color3.fromRGB(0, 255, 128)
+titleLabel.Text = "GARDEN NOTIFIER"
+titleLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 14
 
-local statusLabel = Instance.new("TextLabel") -- Untuk Debug status
-statusLabel.Parent = infoBox
-statusLabel.Position = UDim2.new(0, 0, 1, -15)
-statusLabel.Size = UDim2.new(1, 0, 0, 15)
+-- INPUT TARGET (Textbox)
+local targetLabel = Instance.new("TextLabel")
+targetLabel.Parent = mainFrame
+targetLabel.Position = UDim2.new(0, 10, 0, 40)
+targetLabel.Size = UDim2.new(0.6, 0, 0, 25)
+targetLabel.BackgroundTransparency = 1
+targetLabel.Text = "Target Jumlah:"
+targetLabel.TextColor3 = Color3.new(1,1,1)
+targetLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local targetInput = Instance.new("TextBox")
+targetInput.Parent = mainFrame
+targetInput.Position = UDim2.new(0.65, 0, 0, 40)
+targetInput.Size = UDim2.new(0.3, 0, 0, 25)
+targetInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+targetInput.TextColor3 = Color3.new(1,1,1)
+targetInput.Text = tostring(DEFAULT_TARGET) -- Default 8
+targetInput.Font = Enum.Font.Code
+targetInput.TextSize = 14
+
+-- STATUS LABEL
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = mainFrame
+statusLabel.Position = UDim2.new(0, 10, 0, 70)
+statusLabel.Size = UDim2.new(1, -20, 0, 20)
 statusLabel.BackgroundTransparency = 1
-statusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-statusLabel.TextSize = 10
-statusLabel.Text = "Status: Memulai..."
+statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+statusLabel.Text = "Status: Monitoring..."
+statusLabel.TextSize = 12
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local listLabel = Instance.new("TextLabel")
-listLabel.Parent = infoBox
-listLabel.Position = UDim2.new(0, 10, 0, 30)
-listLabel.Size = UDim2.new(1, -20, 1, -40)
-listLabel.BackgroundTransparency = 1
-listLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-listLabel.Font = Enum.Font.Code
-listLabel.TextSize = 13
-listLabel.TextXAlignment = Enum.TextXAlignment.Left
-listLabel.TextYAlignment = Enum.TextYAlignment.Top
-listLabel.Text = "Mencari Folder..."
-listLabel.RichText = true
+-- LIST HASIL (Scrollable)
+local resultFrame = Instance.new("ScrollingFrame")
+resultFrame.Parent = mainFrame
+resultFrame.Position = UDim2.new(0, 10, 0, 100)
+resultFrame.Size = UDim2.new(1, -20, 1, -110)
+resultFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+resultFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 
--- 3. FUNGSI MEMBERSIHKAN TEKS HTML
+local resultText = Instance.new("TextLabel")
+resultText.Parent = resultFrame
+resultText.Size = UDim2.new(1, 0, 1, 0)
+resultText.BackgroundTransparency = 1
+resultText.TextColor3 = Color3.new(1,1,1)
+resultText.TextXAlignment = Enum.TextXAlignment.Left
+resultText.TextYAlignment = Enum.TextYAlignment.Top
+resultText.Text = "Menunggu data..."
+resultText.RichText = true
+
+-- ======================================================
+-- LOGIC FUNCTIONS
+-- ======================================================
+
+local hasSentWebhook = false -- Flag supaya tidak spam
+local lastTotal = 0
+
 local function cleanText(str)
-    local clean = string.gsub(str, "<.->", "") -- Hapus tag font/color
-    clean = string.match(clean, "^%s*(.-)%s*$") -- Hapus spasi
+    local clean = string.gsub(str, "<.->", "") 
+    clean = string.match(clean, "^%s*(.-)%s*$")
     return clean
 end
 
--- 4. FUNGSI MENCARI FOLDER TARGET SECARA AMAN
-local function getTargetFolder()
-    -- Urutan Path: Farm -> Farm -> Important -> Objects_Physical
-    local f1 = Workspace:FindFirstChild("Farm")
-    if not f1 then return nil, "Farm (1) tidak ketemu" end
+-- Fungsi Kirim Webhook
+local function sendDiscordWebhook(dataList, totalCount)
+    if WEBHOOK_URL == "MASUKAN_WEBHOOK_URL_DISINI" or WEBHOOK_URL == "" then
+        statusLabel.Text = "Error: Webhook URL kosong!"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        return
+    end
+
+    statusLabel.Text = "Mengirim ke Discord..."
     
-    local f2 = f1:FindFirstChild("Farm")
-    if not f2 then return nil, "Farm (2) tidak ketemu" end
-    
-    local f3 = f2:FindFirstChild("Important")
-    if not f3 then return nil, "Folder 'Important' tidak ketemu" end
-    
-    -- Coba cari Objects_Physical (Underscore) ATAU Objects-Physical (Strip)
-    local f4 = f3:FindFirstChild("Objects_Physical") or f3:FindFirstChild("Objects-Physical")
-    if not f4 then return nil, "Objects_Physical tidak ketemu" end
-    
-    return f4, "Folder OK"
+    -- Format pesan untuk Discord
+    local description = "**Total Detected: " .. totalCount .. "**\n\n"
+    for name, count in pairs(dataList) do
+        description = description .. "• " .. name .. " (x" .. count .. ")\n"
+    end
+
+    local payload = {
+        content = "@here Panen Siap! Target Tercapai.",
+        embeds = {{
+            title = "🌱 Grow a Garden - Egg Notification",
+            description = description,
+            color = 65280, -- Warna Hijau
+            footer = { text = "Auto Notifier Script" },
+            timestamp = DateTime.now():ToIsoDate()
+        }}
+    }
+
+    local success, response = pcall(function()
+        request({
+            Url = WEBHOOK_URL,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode(payload)
+        })
+    end)
+
+    if success then
+        statusLabel.Text = "Terkirim ke Discord! ✅"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    else
+        statusLabel.Text = "Gagal kirim Webhook ❌"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    end
 end
 
--- 5. LOOP UTAMA
+-- Fungsi Utama Scan
+local function scanAndNotify()
+    -- Ambil Target dari Input Box
+    local targetLimit = tonumber(targetInput.Text) or 8
+    
+    local f1 = Workspace:FindFirstChild("Farm")
+    local f2 = f1 and f1:FindFirstChild("Farm")
+    local f3 = f2 and f2:FindFirstChild("Important")
+    local folder = f3 and (f3:FindFirstChild("Objects_Physical") or f3:FindFirstChild("Objects-Physical"))
+
+    if not folder then
+        resultText.Text = "Folder tidak ditemukan!"
+        return
+    end
+
+    local counts = {}
+    local totalFound = 0
+
+    -- Scan Logic
+    for _, item in ipairs(folder:GetDescendants()) do
+        if item:IsA("TextLabel") and item.Parent:IsA("BillboardGui") then
+            local rawText = item.Text
+            if string.find(rawText, "<font") or string.len(rawText) > 2 then
+                local name = cleanText(rawText)
+                
+                -- Bersihkan enter/newline yang mengganggu di screenshot
+                name = string.gsub(name, "\n", " ") 
+                -- Ambil kata kunci penting saja (misal nama hewan) kalau string kepanjangan
+                -- (Opsional, saat ini kita ambil full string yang sudah dibersihkan)
+                
+                if name ~= "" and not tonumber(name) and name ~= "..." then
+                    totalFound = totalFound + 1
+                    counts[name] = (counts[name] or 0) + 1
+                end
+            end
+        end
+    end
+
+    -- Update Tampilan GUI
+    local displayText = ""
+    for name, count in pairs(counts) do
+        displayText = displayText .. "• " .. name .. ": <b>" .. count .. "</b>\n\n"
+    end
+    resultText.Text = displayText
+    
+    -- Sesuaikan ukuran scroll
+    resultFrame.CanvasSize = UDim2.new(0, 0, 0, totalFound * 30)
+
+    -- LOGIC NOTIFIKASI
+    if totalFound >= targetLimit then
+        -- Jika target tercapai DAN belum pernah kirim (untuk sesi ini)
+        if not hasSentWebhook then
+            sendDiscordWebhook(counts, totalFound)
+            hasSentWebhook = true -- Kunci supaya tidak spam
+        end
+    else
+        -- Jika jumlah turun di bawah target (misal sudah dipanen), reset kunci
+        if hasSentWebhook then
+            hasSentWebhook = false
+            statusLabel.Text = "Reset. Menunggu target..."
+            statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+        else
+            statusLabel.Text = "Menunggu... (" .. totalFound .. "/" .. targetLimit .. ")"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+        end
+    end
+end
+
+-- Loop setiap 2 detik
 task.spawn(function()
     while true do
-        local folder, status = getTargetFolder()
-        statusLabel.Text = "Status: " .. status
-        
-        if folder then
-            local counts = {}
-            local totalDetected = 0
-            
-            -- Scan semua anak di dalam folder target
-            for _, item in ipairs(folder:GetDescendants()) do
-                -- Kita cari TextLabel yg ada di dalam BillboardGui
-                if item:IsA("TextLabel") and item.Parent:IsA("BillboardGui") then
-                    local rawText = item.Text
-                    
-                    -- Cek apakah ini teks ESP (ada kode warnanya)
-                    -- Atau kalau script ESP itu sudah membersihkan teksnya, kita ambil apa adanya
-                    if string.find(rawText, "<font") or string.len(rawText) > 2 then
-                        local name = cleanText(rawText)
-                        
-                        -- Filter sampah (angka, titik, dll)
-                        if name ~= "" and not tonumber(name) and name ~= "..." then
-                            totalDetected = totalDetected + 1
-                            counts[name] = (counts[name] or 0) + 1
-                        end
-                    end
-                end
-            end
-            
-            -- Tampilkan Hasil
-            if totalDetected > 0 then
-                local displayText = ""
-                local sortedNames = {}
-                for name in pairs(counts) do table.insert(sortedNames, name) end
-                table.sort(sortedNames)
-                
-                for _, name in ipairs(sortedNames) do
-                    displayText = displayText .. "• " .. name .. ": <b>" .. counts[name] .. "</b>\n"
-                end
-                listLabel.Text = displayText
-                -- Resize kotak
-                infoBox.Size = UDim2.new(0, 200, 0, 50 + (#sortedNames * 15))
-            else
-                listLabel.Text = "ESP Aktif, tapi belum ada telur terdeteksi."
-            end
-        else
-            listLabel.Text = "Path Error: " .. status
-        end
-        
-        task.wait(1) -- Update setiap detik
+        scanAndNotify()
+        task.wait(2)
     end
 end)
