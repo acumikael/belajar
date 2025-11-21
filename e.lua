@@ -1,11 +1,11 @@
 -- ======================================================
 -- CONFIGURATION (ISI DISINI)
 -- ======================================================
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1421435065220468779/gnBnih3p73YbLcUggL-fk2HzEKgfTyYPp0UHiinW8J8---3bs_J8WvUymWT2Vgef5_fE" -- Ganti dengan URL Webhook Discord Anda
-local DEFAULT_TARGET = 69 -- Jumlah default target
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1421435065220468779/gnBnih3p73YbLcUggL-fk2HzEKgfTyYPp0UHiinW8J8---3bs_J8WvUymWT2Vgef5_fE" -- Ganti URL Webhook
+local DEFAULT_TARGET = 8 
 
 -- ======================================================
--- SERVICES & VARIABLES
+-- SERVICES
 -- ======================================================
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
@@ -13,328 +13,301 @@ local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 
--- Fungsi Request (Support Delta/Fluxus/Arceus)
 local request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 
--- STATE VARIABLES
+-- STATE
 local isRunning = false
 local sessionStartTime = 0
 local batchStartTime = 0
 local totalHatched = 0
-local lastBatchDuration = "N/A"
+local lastBatchDuration = "0s"
 local hasSentWebhook = false
 
 -- ======================================================
 -- UI SETUP
 -- ======================================================
-if player.PlayerGui:FindFirstChild("GardenManagerPro") then
-    player.PlayerGui.GardenManagerPro:Destroy()
+if player.PlayerGui:FindFirstChild("GardenUltimate") then
+    player.PlayerGui.GardenUltimate:Destroy()
 end
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "GardenManagerPro"
+screenGui.Name = "GardenUltimate"
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
--- FRAME UTAMA
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.Parent = screenGui
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 mainFrame.Position = UDim2.new(0.85, 0, 0.5, 0)
-mainFrame.Size = UDim2.new(0, 240, 0, 320) -- Diperbesar untuk stats
-mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-mainFrame.BorderColor3 = Color3.fromRGB(0, 255, 128)
+mainFrame.Size = UDim2.new(0, 250, 0, 350)
+mainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+mainFrame.BorderColor3 = Color3.fromRGB(0, 255, 255) -- Cyan Border
 mainFrame.BorderSizePixel = 2
 mainFrame.Active = true
 mainFrame.Draggable = true
 
--- JUDUL
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Parent = mainFrame
-titleLabel.Size = UDim2.new(1, 0, 0, 30)
-titleLabel.BackgroundColor3 = Color3.fromRGB(0, 255, 128)
-titleLabel.Text = "GARDEN MANAGER PRO"
-titleLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.TextSize = 14
+-- TITLE
+local title = Instance.new("TextLabel")
+title.Parent = mainFrame
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
+title.Text = "GARDEN MANAGER ULTIMATE"
+title.TextColor3 = Color3.new(0,0,0)
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 14
 
--- AREA INPUT TARGET
-local targetLabel = Instance.new("TextLabel")
-targetLabel.Parent = mainFrame
-targetLabel.Position = UDim2.new(0, 10, 0, 40)
-targetLabel.Size = UDim2.new(0.5, 0, 0, 25)
-targetLabel.BackgroundTransparency = 1
-targetLabel.Text = "Target Batch:"
-targetLabel.TextColor3 = Color3.new(1,1,1)
-targetLabel.TextXAlignment = Enum.TextXAlignment.Left
+-- INPUT
+local targetBox = Instance.new("TextBox")
+targetBox.Parent = mainFrame
+targetBox.Position = UDim2.new(0.6, 0, 0, 40)
+targetBox.Size = UDim2.new(0.35, 0, 0, 25)
+targetBox.Text = tostring(DEFAULT_TARGET)
+targetBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
+targetBox.TextColor3 = Color3.new(1,1,1)
+targetBox.Font = Enum.Font.GothamBold
+targetBox.TextSize = 14
 
-local targetInput = Instance.new("TextBox")
-targetInput.Parent = mainFrame
-targetInput.Position = UDim2.new(0.6, 0, 0, 40)
-targetInput.Size = UDim2.new(0.35, 0, 0, 25)
-targetInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-targetInput.TextColor3 = Color3.new(1,1,1)
-targetInput.Text = tostring(DEFAULT_TARGET)
-targetInput.Font = Enum.Font.Code
-targetInput.TextSize = 14
+local labelTarget = Instance.new("TextLabel")
+labelTarget.Parent = mainFrame
+labelTarget.Position = UDim2.new(0, 10, 0, 40)
+labelTarget.Size = UDim2.new(0.5, 0, 0, 25)
+labelTarget.BackgroundTransparency = 1
+labelTarget.Text = "Target Batch:"
+labelTarget.TextColor3 = Color3.new(1,1,1)
+labelTarget.TextXAlignment = Enum.TextXAlignment.Left
 
--- TOMBOL START/STOP
-local startBtn = Instance.new("TextButton")
-startBtn.Parent = mainFrame
-startBtn.Position = UDim2.new(0, 10, 0, 75)
-startBtn.Size = UDim2.new(1, -20, 0, 30)
-startBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 0) -- Hijau
-startBtn.Text = "START TRACKING"
-startBtn.TextColor3 = Color3.new(1,1,1)
-startBtn.Font = Enum.Font.GothamBold
-startBtn.TextSize = 14
+-- BUTTON
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Parent = mainFrame
+toggleBtn.Position = UDim2.new(0, 10, 0, 75)
+toggleBtn.Size = UDim2.new(1, -20, 0, 35)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+toggleBtn.Text = "START / RESUME"
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 16
+toggleBtn.TextColor3 = Color3.new(1,1,1)
 
--- STATISTIK DISPLAY
-local statsFrame = Instance.new("Frame")
-statsFrame.Parent = mainFrame
-statsFrame.Position = UDim2.new(0, 10, 0, 115)
-statsFrame.Size = UDim2.new(1, -20, 0, 60)
-statsFrame.BackgroundTransparency = 1
+-- STATS LABELS
+local statsContainer = Instance.new("Frame")
+statsContainer.Parent = mainFrame
+statsContainer.Position = UDim2.new(0, 10, 0, 120)
+statsContainer.Size = UDim2.new(1, -20, 0, 80)
+statsContainer.BackgroundTransparency = 1
 
-local function createStatLabel(name, val, yPos)
+local function makeLabel(txt, y)
     local l = Instance.new("TextLabel")
-    l.Parent = statsFrame
-    l.Position = UDim2.new(0, 0, 0, yPos)
-    l.Size = UDim2.new(1, 0, 0, 15)
+    l.Parent = statsContainer
+    l.Position = UDim2.new(0,0,0,y)
+    l.Size = UDim2.new(1,0,0,15)
     l.BackgroundTransparency = 1
+    l.TextColor3 = Color3.fromRGB(200,200,200)
     l.TextXAlignment = Enum.TextXAlignment.Left
-    l.TextColor3 = Color3.fromRGB(200, 200, 200)
     l.Font = Enum.Font.Code
     l.TextSize = 12
-    l.Text = name .. ": " .. val
+    l.Text = txt
     return l
 end
 
-local runtimeLabel = createStatLabel("Runtime", "00:00:00", 0)
-local hatchedLabel = createStatLabel("Total Hatched", "0", 15)
-local lastBatchLabel = createStatLabel("Last Batch", "N/A", 30)
-local currentStatusLabel = createStatLabel("Status", "Idle", 45)
-currentStatusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+local lblRuntime = makeLabel("Runtime: 00:00:00", 0)
+local lblHatched = makeLabel("Total Hatched: 0", 15)
+local lblLastBatch = makeLabel("Last Batch Time: -", 30)
+local lblStatus = makeLabel("Status: IDLE", 45)
+lblStatus.TextColor3 = Color3.fromRGB(255, 255, 0)
+local lblDebug = makeLabel("Debug: -", 60) -- Tambahan untuk cek error
+lblDebug.TextColor3 = Color3.fromRGB(100, 100, 100)
 
--- LIST HASIL (Scrollable)
-local resultFrame = Instance.new("ScrollingFrame")
-resultFrame.Parent = mainFrame
-resultFrame.Position = UDim2.new(0, 10, 0, 185)
-resultFrame.Size = UDim2.new(1, -20, 1, -195)
-resultFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-resultFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+-- RESULT LIST
+local scrollList = Instance.new("ScrollingFrame")
+scrollList.Parent = mainFrame
+scrollList.Position = UDim2.new(0, 10, 0, 210)
+scrollList.Size = UDim2.new(1, -20, 1, -220)
+scrollList.BackgroundColor3 = Color3.fromRGB(20,20,20)
+scrollList.CanvasSize = UDim2.new(0,0,0,0)
 
 local resultText = Instance.new("TextLabel")
-resultText.Parent = resultFrame
-resultText.Size = UDim2.new(1, 0, 1, 0)
+resultText.Parent = scrollList
+resultText.Size = UDim2.new(1,0,1,0)
 resultText.BackgroundTransparency = 1
 resultText.TextColor3 = Color3.new(1,1,1)
 resultText.TextXAlignment = Enum.TextXAlignment.Left
 resultText.TextYAlignment = Enum.TextYAlignment.Top
-resultText.Text = "Menunggu Start..."
 resultText.RichText = true
+resultText.Text = "Tekan START..."
 
 -- ======================================================
--- LOGIC FUNCTIONS
+-- FUNCTIONS
 -- ======================================================
 
--- Format Detik ke Jam:Menit:Detik
-local function formatTime(seconds)
-    if seconds <= 0 then return "00:00:00" end
-    local h = math.floor(seconds / 3600)
-    local m = math.floor((seconds % 3600) / 60)
-    local s = math.floor(seconds % 60)
-    return string.format("%02d:%02d:%02d", h, m, s)
-end
-
--- Format Detik ke Menit:Detik (Untuk Batch)
-local function formatBatchTime(seconds)
-    if seconds <= 0 then return "0s" end
-    local m = math.floor(seconds / 60)
-    local s = math.floor(seconds % 60)
-    if m > 0 then
-        return string.format("%dm %ds", m, s)
-    else
-        return string.format("%ds", s)
-    end
+local function formatTime(s)
+    if s <= 0 then return "00:00:00" end
+    return string.format("%02d:%02d:%02d", s/3600, (s%3600)/60, s%60)
 end
 
 local function cleanText(str)
-    local clean = string.gsub(str, "<.->", "") 
+    local clean = string.gsub(str, "<.->", "")
     clean = string.match(clean, "^%s*(.-)%s*$")
     return clean
 end
 
--- Update Webhook
-local function sendDiscordWebhook(dataList, totalCount)
-    if WEBHOOK_URL == "MASUKAN_WEBHOOK_URL_DISINI" or WEBHOOK_URL == "" then
-        currentStatusLabel.Text = "Status: URL Webhook Error!"
-        return
+local function sendWebhook(dataList, count)
+    if not WEBHOOK_URL or WEBHOOK_URL == "MASUKAN_WEBHOOK_URL_DISINI" then return end
+    
+    lblStatus.Text = "Status: Mengirim Webhook..."
+    
+    local runtimeStr = formatTime(tick() - sessionStartTime)
+    
+    local contentStr = ""
+    for name, qty in pairs(dataList) do
+        contentStr = contentStr .. "• **" .. name .. "** x" .. qty .. "\n"
     end
-
-    currentStatusLabel.Text = "Status: Mengirim Webhook..."
     
-    local runTimeStr = formatTime(tick() - sessionStartTime)
-    
-    local description = "**Batch Completed!**\n"
-    description = description .. "📦 **Collected:** " .. totalCount .. "\n"
-    description = description .. "⏱️ **Batch Time:** " .. lastBatchDuration .. "\n"
-    description = description .. "⏳ **Total Runtime:** " .. runTimeStr .. "\n"
-    description = description .. "🥚 **Total Session:** " .. totalHatched .. "\n\n"
-    description = description .. "**Isi Batch:**\n"
-    
-    for name, count in pairs(dataList) do
-        description = description .. "• " .. name .. " (x" .. count .. ")\n"
-    end
-
-    local payload = {
-        content = "",
-        embeds = {{
-            title = "🌱 Garden Report - " .. player.Name,
-            description = description,
-            color = 65280,
-            footer = { text = "Garden Manager Pro" },
-            timestamp = DateTime.now():ToIsoDate()
-        }}
+    local embedData = {
+        {
+            ["title"] = "🌱 Garden Harvest Report",
+            ["description"] = "Batch Target Tercapai!",
+            ["color"] = 65280, -- Hijau
+            ["fields"] = {
+                { ["name"] = "⏱️ Runtime", ["value"] = runtimeStr, ["inline"] = true },
+                { ["name"] = "🥚 Total Hatched", ["value"] = tostring(totalHatched), ["inline"] = true },
+                { ["name"] = "⚡ Last Batch", ["value"] = lastBatchDuration, ["inline"] = true },
+                { ["name"] = "📦 Isi Batch Ini", ["value"] = contentStr, ["inline"] = false }
+            },
+            ["footer"] = { ["text"] = "Garden Ultimate Script" },
+            ["timestamp"] = DateTime.now():ToIsoDate()
+        }
     }
 
-    pcall(function()
-        request({
-            Url = WEBHOOK_URL,
-            Method = "POST",
-            Headers = {["Content-Type"] = "application/json"},
-            Body = HttpService:JSONEncode(payload)
-        })
-    end)
+    local payload = HttpService:JSONEncode({
+        ["embeds"] = embedData
+    })
+
+    request({
+        Url = WEBHOOK_URL,
+        Method = "POST",
+        Headers = {["Content-Type"] = "application/json"},
+        Body = payload
+    })
     
-    currentStatusLabel.Text = "Status: Terkirim! Menunggu Reset..."
+    lblStatus.Text = "Status: Webhook Terkirim!"
 end
 
 -- ======================================================
--- BUTTON LOGIC
+-- CORE LOGIC (SCANNER)
 -- ======================================================
-startBtn.MouseButton1Click:Connect(function()
-    isRunning = not isRunning
+
+local function scanGarden()
+    if not isRunning then return end
     
-    if isRunning then
-        -- RESET START
-        startBtn.Text = "STOP / RESET"
-        startBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0) -- Merah
-        
-        sessionStartTime = tick()
-        batchStartTime = tick()
-        totalHatched = 0
-        lastBatchDuration = "-"
-        hasSentWebhook = false
-        
-        hatchedLabel.Text = "Total Hatched: 0"
-        lastBatchLabel.Text = "Last Batch: -"
-        currentStatusLabel.Text = "Status: Running..."
-    else
-        -- STOP
-        startBtn.Text = "START TRACKING"
-        startBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 0) -- Hijau
-        currentStatusLabel.Text = "Status: Paused"
-    end
-end)
-
--- ======================================================
--- MAIN LOOP
--- ======================================================
-local function scanAndNotify()
-    -- Update Runtime Display setiap saat jika running
-    if isRunning then
-        local currentRun = tick() - sessionStartTime
-        runtimeLabel.Text = "Runtime: " .. formatTime(currentRun)
-    end
-
-    -- Target Input Logic
-    local targetLimit = tonumber(targetInput.Text) or 8
+    -- Update Runtime
+    lblRuntime.Text = "Runtime: " .. formatTime(tick() - sessionStartTime)
     
-    -- Mencari Folder
-    local f1 = Workspace:FindFirstChild("Farm")
-    local f2 = f1 and f1:FindFirstChild("Farm")
-    local f3 = f2 and f2:FindFirstChild("Important")
-    local folder = f3 and (f3:FindFirstChild("Objects_Physical") or f3:FindFirstChild("Objects-Physical"))
-
-    if not folder then
-        resultText.Text = "Mencari Folder..."
-        return
-    end
-
-    local counts = {}
-    local totalFound = 0
-
-    -- Scanning TextLabels
-    for _, item in ipairs(folder:GetDescendants()) do
-        if item:IsA("TextLabel") and item.Parent:IsA("BillboardGui") then
-            local rawText = item.Text
-            if string.find(rawText, "<font") or string.len(rawText) > 2 then
-                local name = cleanText(rawText)
-                name = string.gsub(name, "\n", " ") 
+    local target = tonumber(targetBox.Text) or 8
+    local foundCounts = {}
+    local foundTotal = 0
+    
+    -- SEARCH LOGIC YANG DIPERBAIKI (LEBIH LUAS)
+    -- Kita mencari di workspace.Farm.Farm (Induk utama)
+    -- Jika tidak ketemu, cari di seluruh workspace (Backup)
+    local searchRoot = workspace:FindFirstChild("Farm") and workspace.Farm:FindFirstChild("Farm") or workspace
+    
+    -- Debugging info
+    local scannedObjects = 0
+    
+    for _, obj in ipairs(searchRoot:GetDescendants()) do
+        if obj:IsA("TextLabel") and obj.Visible then
+            scannedObjects = scannedObjects + 1
+            
+            -- Cek 1: Apakah teksnya mengandung HTML (ESP)
+            -- Cek 2: Apakah induknya BillboardGui (Text Melayang)
+            local isESP = false
+            
+            if string.find(obj.Text, "<font") then
+                isESP = true
+            elseif obj:FindFirstAncestorWhichIsA("BillboardGui") then
+                -- Jika teksnya panjang (bukan cuma angka/titik), anggap ESP
+                if string.len(obj.Text) > 2 and not tonumber(obj.Text) then
+                    isESP = true
+                end
+            end
+            
+            if isESP then
+                local raw = cleanText(obj.Text)
+                local name = string.gsub(raw, "\n", " ") -- Hapus enter
                 
-                if name ~= "" and not tonumber(name) and name ~= "..." then
-                    totalFound = totalFound + 1
-                    counts[name] = (counts[name] or 0) + 1
+                -- Filter sampah lagi
+                if name ~= "" and name ~= "..." and not string.find(name, "Status") then
+                    foundTotal = foundTotal + 1
+                    foundCounts[name] = (foundCounts[name] or 0) + 1
                 end
             end
         end
     end
-
-    -- Update List Teks GUI
-    local displayText = ""
-    for name, count in pairs(counts) do
-        displayText = displayText .. "• " .. name .. ": <b>" .. count .. "</b>\n"
-    end
     
-    if not isRunning then
-        resultText.Text = "--- PAUSED ---\n" .. displayText
+    lblDebug.Text = "Debug: Scan " .. scannedObjects .. " obj, Found " .. foundTotal
+
+    -- UPDATE UI LIST
+    local listStr = ""
+    for n, c in pairs(foundCounts) do
+        listStr = listStr .. "• " .. n .. ": <b>" .. c .. "</b>\n"
+    end
+    resultText.Text = listStr
+    scrollList.CanvasSize = UDim2.new(0,0,0, foundTotal * 20)
+
+    -- LOGIC BATCH & WEBHOOK
+    if foundTotal >= target then
+        if not hasSentWebhook then
+            -- BATCH SELESAI
+            local dur = tick() - batchStartTime
+            lastBatchDuration = (dur < 60) and math.floor(dur).."s" or math.floor(dur/60).."m "..math.floor(dur%60).."s"
+            
+            totalHatched = totalHatched + foundTotal
+            
+            -- Update GUI Stats
+            lblLastBatch.Text = "Last Batch Time: " .. lastBatchDuration
+            lblHatched.Text = "Total Hatched: " .. totalHatched
+            
+            sendWebhook(foundCounts, foundTotal)
+            hasSentWebhook = true
+        end
     else
-        resultText.Text = displayText
-    end
-    
-    resultFrame.CanvasSize = UDim2.new(0, 0, 0, totalFound * 20)
-
-    -- LOGIC STATISTIK & WEBHOOK (Hanya jika Running)
-    if isRunning then
-        if totalFound >= targetLimit then
-            -- TARGET TERCAPAI
-            if not hasSentWebhook then
-                -- Hitung durasi batch ini
-                local durationSecs = tick() - batchStartTime
-                lastBatchDuration = formatBatchTime(durationSecs)
-                
-                -- Update Stats UI
-                lastBatchLabel.Text = "Last Batch: " .. lastBatchDuration
-                totalHatched = totalHatched + totalFound
-                hatchedLabel.Text = "Total Hatched: " .. totalHatched
-                
-                -- Kirim Webhook
-                sendDiscordWebhook(counts, totalFound)
-                
-                hasSentWebhook = true -- Kunci
-            end
-        else
-            -- LOGIC RESET BATCH
-            -- Jika jumlah telur turun drastis (misal di bawah setengah target), kita anggap user sudah panen (Hatch)
-            -- Maka kita reset timer untuk batch berikutnya
-            if hasSentWebhook and totalFound < (targetLimit / 2) then
-                hasSentWebhook = false
-                batchStartTime = tick() -- Mulai hitung waktu batch baru
-                currentStatusLabel.Text = "Status: Batch Reset. Timer baru dimulai."
-                currentStatusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-            elseif not hasSentWebhook then
-                currentStatusLabel.Text = "Status: Mengisi (" .. totalFound .. "/" .. targetLimit .. ")"
-                currentStatusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-            end
+        -- LOGIC RESET
+        if hasSentWebhook and foundTotal < (target / 2) then
+            -- Anggap user sudah panen, reset status
+            hasSentWebhook = false
+            batchStartTime = tick()
+            lblStatus.Text = "Status: Reset. New Batch."
+        elseif not hasSentWebhook then
+            lblStatus.Text = "Status: Mengisi (" .. foundTotal .. "/" .. target .. ")"
         end
     end
 end
 
--- Loop System
+-- ======================================================
+-- BUTTON HANDLER
+-- ======================================================
+toggleBtn.MouseButton1Click:Connect(function()
+    isRunning = not isRunning
+    if isRunning then
+        toggleBtn.Text = "PAUSE / STOP"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        
+        -- Jika ini start pertama kali, set timer
+        if sessionStartTime == 0 then
+            sessionStartTime = tick()
+            batchStartTime = tick()
+            lblStatus.Text = "Status: Started."
+        end
+    else
+        toggleBtn.Text = "RESUME"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+        lblStatus.Text = "Status: Paused."
+    end
+end)
+
+-- LOOP
 task.spawn(function()
     while true do
-        scanAndNotify()
+        scanGarden()
         task.wait(1)
     end
 end)
