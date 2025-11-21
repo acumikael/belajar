@@ -477,7 +477,7 @@ local function sendWebhook(normalEggs, bigEggs)
                 {["name"] = "⚡ Last Batch", ["value"] = lastBatchDuration, ["inline"] = true},
                 {["name"] = "🥚 Total Hatched", ["value"] = tostring(totalHatched), ["inline"] = true}
             },
-            ["footer"] = {["text"] = "Garden Tracker"},
+            ["footer"] = {["text"] = "kambingnoob"},
             ["timestamp"] = DateTime.now():ToIsoDate()
         }
     }
@@ -629,3 +629,4 @@ task.spawn(function()
         task.wait(1)
     end
 end)
+
