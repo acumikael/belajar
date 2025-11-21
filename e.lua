@@ -201,7 +201,7 @@ local function sendWebhook(dataList, count)
                 { ["name"] = "⚡ Last Batch", ["value"] = lastBatchDuration, ["inline"] = true },
                 { ["name"] = "📦 Isi Egg Batch Ini", ["value"] = contentStr, ["inline"] = false }
             },
-            ["footer"] = { ["text"] = "Garden Ultimate Script" },
+            ["footer"] = { ["text"] = "kambingnoob" },
             ["timestamp"] = DateTime.now():ToIsoDate()
         }
     }
