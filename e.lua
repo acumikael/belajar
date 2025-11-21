@@ -1,16 +1,9 @@
 --[[
-    GARDEN TRACKER FINAL VERSION (WITH FULL COMMENTS)
-    VERSION B — Clean code + full explanations
+    GARDEN TRACKER FINAL VERSION (FIXED FOR DELTA)
     Features:
-    - GUI resizable
-    - Batch tracking
-    - Big egg tier system
-    - Big egg cache (no repeated @here)
-    - Webhook embed output
-    - Egg name parser
-    - Pet parser
-    - Grouping normal eggs
-    - Big eggs separated
+    - Fix Webhook Body (JSON Encode)
+    - Fix Delta Request Detection
+    - GUI resizable & Batch tracking maintained
 ]]--
 
 ---------------------------------------------------------
@@ -23,19 +16,10 @@ local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 
-local request = nil
-
-if http_request then
-    request = http_request
-elseif syn and syn.request then
-    request = syn.request
-elseif fluxus and fluxus.request then
-    request = fluxus.request
-else
-    request = function()
-        warn("Executor kamu TIDAK mendukung HTTP request.")
-        return nil
-    end
+-- [PERBAIKAN 1]: Deteksi request yang lebih baik untuk Delta/Mobile Executor
+local request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request or function()
+    warn("Executor kamu TIDAK mendukung HTTP request.")
+    return nil
 end
 
 ---------------------------------------------------------
@@ -105,7 +89,7 @@ local title = Instance.new("TextLabel")
 title.Parent = mainFrame
 title.Size = UDim2.new(1, 0, 0, 32)
 title.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-title.Text = "Garden Tracker V0.3"
+title.Text = "Garden Tracker V0.3 (Fix)"
 title.TextColor3 = Color3.fromRGB(235, 235, 235)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -367,9 +351,6 @@ end
 
 ---------------------------------------------------------
 -- PARSER: MENGAMBIL EGG NAME, PET NAME, DAN KG
--- FORMAT YANG DIDUKUNG:
--- "Rare Summer Egg Flamingo 1.78 KG"
--- Egg Name selalu berakhir dengan kata "Egg"
 ---------------------------------------------------------
 
 local function parseEggLine(text)
@@ -381,7 +362,6 @@ local function parseEggLine(text)
         table.insert(words, w)
     end
 
-    -- cari index kata "Egg"
     local eggIndex = nil
     for i, w in ipairs(words) do
         if w:lower() == "egg" then
@@ -392,14 +372,12 @@ local function parseEggLine(text)
 
     if not eggIndex then return nil, nil, nil end
 
-    -- egg name = semua kata sampai Egg
     local eggWords = {}
     for i = 1, eggIndex do
         table.insert(eggWords, words[i])
     end
     local eggName = table.concat(eggWords, " ")
 
-    -- pet name = semua kata setelah Egg sampai sebelum angka
     local petWords = {}
     for i = eggIndex + 1, #words do
         if tonumber(words[i]) then break end
@@ -407,7 +385,6 @@ local function parseEggLine(text)
     end
     local petName = table.concat(petWords, " ")
 
-    -- KG = angka terakhir
     local kg = nil
     for i = #words, 1, -1 do
         if tonumber(words[i]) then
@@ -420,15 +397,7 @@ local function parseEggLine(text)
 end
 
 ---------------------------------------------------------
--- TIER LOGIC BERDASARKAN KG
--- Referensi dari table warna kamu:
--- <3      = Normal
--- 3–4.9   = Semi Huge
--- 5–6.9   = Huge
--- 7–7.9   = Semi Titanic
--- 8–8.9   = Titanic
--- 9–9.9   = Godly
--- 10+     = Colossal
+-- TIER LOGIC
 ---------------------------------------------------------
 
 local function getTier(kg)
@@ -458,9 +427,6 @@ end
 local function buildResultList(normalEggs, bigEggs)
     local result = ""
 
-    -----------------------------------------------------
-    -- NORMAL EGGS (Group: EggName -> PetName (count))
-    -----------------------------------------------------
     for eggName, pets in pairs(normalEggs) do
         for petName, info in pairs(pets) do
             local tier, color = getTier(info.maxKG)
@@ -475,9 +441,6 @@ local function buildResultList(normalEggs, bigEggs)
         end
     end
 
-    -----------------------------------------------------
-    -- BIG EGGS (Setiap egg tampil sendiri)
-    -----------------------------------------------------
     for _, e in ipairs(bigEggs) do
         local tier, color = getTier(e.kg)
         result = result .. string.format(
@@ -497,40 +460,20 @@ local function buildResultList(normalEggs, bigEggs)
     return result
 end
 ---------------------------------------------------------
--- SCANNER:
---   - Scan semua label ESP
---   - Parse egg name, pet name, dan KG
---   - Group Normal Eggs (< threshold)
---   - Pisahkan Big Eggs (>= threshold)
---   - Update GUI
+-- SCANNER
 ---------------------------------------------------------
 
 local function scanGarden()
     if not isRunning then return end
 
-    -----------------------------------------------------
-    -- Update Timer UI
-    -----------------------------------------------------
     lblRuntime.Text = "Runtime: " .. formatTime(tick() - sessionStartTime)
 
     local target = tonumber(targetBox.Text) or DEFAULT_TARGET
     local bigThreshold = tonumber(bigEggBox.Text) or DEFAULT_BIG_EGG_THRESHOLD
 
-    -----------------------------------------------------
-    -- TEMPORARY STORAGE
-    -----------------------------------------------------
-
-    -- normalEggs[eggName][petName] = {count=n, maxKG=x}
     local normalEggs = {}
-
-    -- bigEggs = { {eggName, petName, kg} }
     local bigEggs = {}
-
     local totalReady = 0
-
-    -----------------------------------------------------
-    -- FIND ALL TEXTLABELS
-    -----------------------------------------------------
 
     local searchRoot = workspace:FindFirstChild("Farm") or workspace
 
@@ -539,17 +482,11 @@ local function scanGarden()
 
             local raw = obj.Text
             if string.find(raw, "KG") then
-                -------------------------------------------------
-                -- PARSE eggName, petName, KG
-                -------------------------------------------------
                 local eggName, petName, kg = parseEggLine(raw)
                 if eggName and petName and kg then
 
                     totalReady += 1
 
-                    -------------------------------------------------
-                    -- NORMAL egg (< threshold)
-                    -------------------------------------------------
                     if kg < bigThreshold then
                         normalEggs[eggName] = normalEggs[eggName] or {}
                         normalEggs[eggName][petName] =
@@ -560,10 +497,6 @@ local function scanGarden()
                         if kg > normalEggs[eggName][petName].maxKG then
                             normalEggs[eggName][petName].maxKG = kg
                         end
-
-                    -------------------------------------------------
-                    -- BIG egg (>= threshold)
-                    -------------------------------------------------
                     else
                         table.insert(bigEggs, {
                             eggName = eggName,
@@ -576,10 +509,6 @@ local function scanGarden()
         end
     end
 
-    -----------------------------------------------------
-    -- UPDATE UI RESULT
-    -----------------------------------------------------
-
     local listStr = buildResultList(normalEggs, bigEggs)
     resultText.Text = listStr
 
@@ -589,16 +518,9 @@ local function scanGarden()
         0, math.max(lineCount * 18 + 12, scrollList.AbsoluteWindowSize.Y)
     )
 
-    -----------------------------------------------------
-    -- WEBHOOK LOGIC
-    -----------------------------------------------------
-
     if totalReady >= target then
         if not hasSentWebhook then
 
-            -----------------------------------------------------
-            -- HITUNG DURASI BATCH
-            -----------------------------------------------------
             local dur = tick() - batchStartTime
             if dur < 60 then
                 lastBatchDuration = math.floor(dur) .. "s"
@@ -612,18 +534,12 @@ local function scanGarden()
             lblLastBatch.Text = "Last Batch Time: " .. lastBatchDuration
             lblHatched.Text = "Total Hatched: " .. totalHatched
 
-            -----------------------------------------------------
-            -- KIRIM WEBHOOK
-            -----------------------------------------------------
             sendWebhook(normalEggs, bigEggs)
 
             hasSentWebhook = true
         end
 
     else
-        -----------------------------------------------------
-        -- Reset state jika batch sudah setengah turun
-        -----------------------------------------------------
         if hasSentWebhook and totalReady < (target / 2) then
             hasSentWebhook = false
             batchStartTime = tick()
@@ -635,9 +551,6 @@ local function scanGarden()
 end
 ---------------------------------------------------------
 -- WEBHOOK SYSTEM (ANTI-SPAM BIG EGG)
---  - normalEggs  : hasil grouping non-big
---  - bigEggs     : daftar big egg (tidak digabung)
---  - mention @here ONLY jika big egg baru muncul
 ---------------------------------------------------------
 
 local function sendWebhook(normalEggs, bigEggs)
@@ -653,25 +566,18 @@ local function sendWebhook(normalEggs, bigEggs)
 
     local hasNewBigEgg = false
 
-    -----------------------------------------------------
-    -- CEK BIG EGG BARU (anti-spam)
-    -----------------------------------------------------
     for _, big in ipairs(bigEggs) do
         local key = makeBigEggKey(big.eggName, big.petName, big.kg)
 
         if not notifiedBigEggs[key] then
             hasNewBigEgg = true
-            notifiedBigEggs[key] = true   -- tandai sudah dikirim
+            notifiedBigEggs[key] = true
         end
     end
 
-    -----------------------------------------------------
-    -- BUILD TEXT UNTUK EMBED (normal)
-    -----------------------------------------------------
     for eggName, pets in pairs(normalEggs) do
         for petName, info in pairs(pets) do
             local tier, _ = getTier(info.maxKG)
-
             messageText = messageText ..
                 string.format("[%s] %s -> %s (%d)\n",
                     tier,
@@ -682,12 +588,8 @@ local function sendWebhook(normalEggs, bigEggs)
         end
     end
 
-    -----------------------------------------------------
-    -- BUILD TEXT UNTUK EMBED (big eggs)
-    -----------------------------------------------------
     for _, big in ipairs(bigEggs) do
         local tier, _ = getTier(big.kg)
-
         messageText = messageText ..
             string.format("[%s] %s -> %s (%.1f KG)\n",
                 tier,
@@ -701,13 +603,7 @@ local function sendWebhook(normalEggs, bigEggs)
         messageText = "Tidak ada egg ditemukan."
     end
 
-    -----------------------------------------------------
-    -- WEBHOOK EMBED
-    -----------------------------------------------------
-
-    -- warna embed
-    local color = hasNewBigEgg and 16711680    -- merah untuk big egg
-                            or 65280           -- hijau default
+    local color = hasNewBigEgg and 16711680 or 65280
 
     local embedData = {
         {
@@ -740,23 +636,18 @@ local function sendWebhook(normalEggs, bigEggs)
         }
     }
 
-    -----------------------------------------------------
-    -- FINAL PAYLOAD
-    -----------------------------------------------------
     local payload = {
-        content = hasNewBigEgg and "@here" or nil,  -- Hanya mention 1x
+        content = hasNewBigEgg and "@here" or nil,
         embeds = embedData
     }
 
-    -----------------------------------------------------
-    -- SEND REQUEST
-    -----------------------------------------------------
+    -- [PERBAIKAN 2]: Menambahkan JSONEncode pada Body
     if request then
 	    request({
 	        Url = WEBHOOK_URL,
 	        Method = "POST",
 	        Headers = {["Content-Type"] = "application/json"},
-	        Body = payload
+	        Body = HttpService:JSONEncode(payload) -- WAJIB DI ENCODE JSON
 	    })
 	else
 	    warn("Tidak bisa mengirim webhook: request() tidak ada.")
@@ -808,7 +699,7 @@ minimizeBtn.MouseButton1Click:Connect(function()
     if isMinimized then
         minimizeBtn.Text = "+"
         originalSize = mainFrame.Size
-        mainFrame.Size = UDim2.new(0, 280, 0, 32) -- hanya title bar
+        mainFrame.Size = UDim2.new(0, 280, 0, 32)
 
         for _, child in ipairs(mainFrame:GetChildren()) do
             if child ~= title and child ~= closeBtn and child ~= minimizeBtn then
