@@ -68,7 +68,7 @@ end
 ---------------------------------------------------------
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "GardenUltimate"
+screenGui.Name = "GardenUltimate V0.2"
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local mainFrame = Instance.new("Frame")
@@ -831,4 +831,5 @@ task.spawn(function()
         scanGarden()
         task.wait(1) -- scan tiap 1 detik
     end
+
 end)
