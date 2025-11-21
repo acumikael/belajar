@@ -1,28 +1,46 @@
--- ======================================================
--- CONFIGURATION
--- ======================================================
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1417836981353713684/yPh7jTLDmX7n_rj2-KOanHl6iPGDlvUpHJeCZG90pFOG0NQrwQ6c_e94_tOFRRJ6_sYJ" -- ganti webhook-mu
-local DEFAULT_TARGET = 8
-local BIG_EGG_DEFAULT = 3 -- default batas KG utk dianggap big egg (@here)
+--[[
+    GARDEN TRACKER FINAL VERSION (WITH FULL COMMENTS)
+    VERSION B — Clean code + full explanations
+    Features:
+    - GUI resizable
+    - Batch tracking
+    - Big egg tier system
+    - Big egg cache (no repeated @here)
+    - Webhook embed output
+    - Egg name parser
+    - Pet parser
+    - Grouping normal eggs
+    - Big eggs separated
+]]--
 
--- ======================================================
+---------------------------------------------------------
 -- SERVICES
--- ======================================================
+---------------------------------------------------------
+
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
-local request =
-    (syn and syn.request) or
-    (http and http.request) or
-    http_request or
-    (fluxus and fluxus.request) or
-    request
+local request = (syn and syn.request)
+    or (http and http.request)
+    or http_request
+    or (fluxus and fluxus.request)
+    or request
 
+---------------------------------------------------------
+-- CONFIG
+---------------------------------------------------------
+
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1417836981353713684/yPh7jTLDmX7n_rj2-KOanHl6iPGDlvUpHJeCZG90pFOG0NQrwQ6c_e94_tOFRRJ6_sYJ"
+local DEFAULT_TARGET = 8
+local DEFAULT_BIG_EGG_THRESHOLD = 3
+
+---------------------------------------------------------
 -- STATE
+---------------------------------------------------------
+
 local isRunning = false
 local sessionStartTime = 0
 local batchStartTime = 0
@@ -30,12 +48,24 @@ local totalHatched = 0
 local lastBatchDuration = "0s"
 local hasSentWebhook = false
 
--- ======================================================
--- UI SETUP
--- ======================================================
+-- cache big egg yang sudah pernah dikirim agar tidak spam
+local notifiedBigEggs = {}
+
+local function makeBigEggKey(eggName, petName, kg)
+    return string.format("%s|%s|%.1f", eggName, petName, kg)
+end
+
+---------------------------------------------------------
+-- CLEANUP GUI EXISTING
+---------------------------------------------------------
+
 if player.PlayerGui:FindFirstChild("GardenUltimate") then
     player.PlayerGui.GardenUltimate:Destroy()
 end
+
+---------------------------------------------------------
+-- MAIN GUI CREATION
+---------------------------------------------------------
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "GardenUltimate"
@@ -46,7 +76,7 @@ mainFrame.Name = "MainFrame"
 mainFrame.Parent = screenGui
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 mainFrame.Position = UDim2.new(0.85, 0, 0.5, 0)
-mainFrame.Size = UDim2.new(0, 260, 0, 360)
+mainFrame.Size = UDim2.new(0, 280, 0, 380)
 mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -58,12 +88,15 @@ mainCorner.Parent = mainFrame
 
 local originalSize = mainFrame.Size
 
--- TITLE
+---------------------------------------------------------
+-- TITLE BAR
+---------------------------------------------------------
+
 local title = Instance.new("TextLabel")
 title.Parent = mainFrame
 title.Size = UDim2.new(1, 0, 0, 32)
 title.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-title.Text = "Garden Manager"
+title.Text = "Garden Tracker"
 title.TextColor3 = Color3.fromRGB(235, 235, 235)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -72,7 +105,10 @@ local titleCorner = Instance.new("UICorner")
 titleCorner.CornerRadius = UDim.new(0, 8)
 titleCorner.Parent = title
 
--- CONTROL BUTTONS (CLOSE & MINIMIZE)
+---------------------------------------------------------
+-- CLOSE & MINIMIZE
+---------------------------------------------------------
+
 local isMinimized = false
 
 local closeBtn = Instance.new("TextButton")
@@ -81,11 +117,12 @@ closeBtn.Size = UDim2.new(0, 20, 0, 20)
 closeBtn.Position = UDim2.new(1, -26, 0, 6)
 closeBtn.BackgroundColor3 = Color3.fromRGB(200, 70, 70)
 closeBtn.Text = "X"
-closeBtn.TextColor3 = Color3.new(1, 1, 1)
+closeBtn.TextColor3 = Color3.new(1,1,1)
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.TextSize = 14
+
 local closeCorner = Instance.new("UICorner")
-closeCorner.CornerRadius = UDim.new(1, 0)
+closeCorner.CornerRadius = UDim.new(1,0)
 closeCorner.Parent = closeBtn
 
 local minimizeBtn = Instance.new("TextButton")
@@ -94,21 +131,25 @@ minimizeBtn.Size = UDim2.new(0, 20, 0, 20)
 minimizeBtn.Position = UDim2.new(1, -50, 0, 6)
 minimizeBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
 minimizeBtn.Text = "-"
-minimizeBtn.TextColor3 = Color3.new(1, 1, 1)
+minimizeBtn.TextColor3 = Color3.new(1,1,1)
 minimizeBtn.Font = Enum.Font.GothamBold
 minimizeBtn.TextSize = 14
+
 local miniCorner = Instance.new("UICorner")
-miniCorner.CornerRadius = UDim.new(1, 0)
+miniCorner.CornerRadius = UDim.new(1,0)
 miniCorner.Parent = minimizeBtn
 
--- INPUT TARGET BATCH
+---------------------------------------------------------
+-- TARGET INPUT
+---------------------------------------------------------
+
 local labelTarget = Instance.new("TextLabel")
 labelTarget.Parent = mainFrame
 labelTarget.Position = UDim2.new(0, 12, 0, 42)
 labelTarget.Size = UDim2.new(0.5, 0, 0, 22)
 labelTarget.BackgroundTransparency = 1
 labelTarget.Text = "Target Batch:"
-labelTarget.TextColor3 = Color3.fromRGB(220, 220, 220)
+labelTarget.TextColor3 = Color3.fromRGB(220,220,220)
 labelTarget.TextXAlignment = Enum.TextXAlignment.Left
 labelTarget.Font = Enum.Font.Gotham
 labelTarget.TextSize = 12
@@ -119,15 +160,19 @@ targetBox.Position = UDim2.new(0.55, -4, 0, 42)
 targetBox.Size = UDim2.new(0.4, -8, 0, 22)
 targetBox.Text = tostring(DEFAULT_TARGET)
 targetBox.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
-targetBox.TextColor3 = Color3.new(1, 1, 1)
+targetBox.TextColor3 = Color3.new(1,1,1)
 targetBox.Font = Enum.Font.GothamBold
 targetBox.TextSize = 12
 targetBox.ClearTextOnFocus = false
+
 local targetCorner = Instance.new("UICorner")
 targetCorner.CornerRadius = UDim.new(0, 6)
 targetCorner.Parent = targetBox
 
--- INPUT BIG EGG KG
+---------------------------------------------------------
+-- BIG EGG THRESHOLD INPUT
+---------------------------------------------------------
+
 local labelBig = Instance.new("TextLabel")
 labelBig.Parent = mainFrame
 labelBig.Position = UDim2.new(0, 12, 0, 70)
@@ -143,17 +188,20 @@ local bigEggBox = Instance.new("TextBox")
 bigEggBox.Parent = mainFrame
 bigEggBox.Position = UDim2.new(0.55, -4, 0, 70)
 bigEggBox.Size = UDim2.new(0.4, -8, 0, 22)
-bigEggBox.Text = tostring(BIG_EGG_DEFAULT)
+bigEggBox.Text = tostring(DEFAULT_BIG_EGG_THRESHOLD)
 bigEggBox.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
-bigEggBox.TextColor3 = Color3.new(1, 1, 1)
+bigEggBox.TextColor3 = Color3.new(1,1,1)
 bigEggBox.Font = Enum.Font.GothamBold
 bigEggBox.TextSize = 12
 bigEggBox.ClearTextOnFocus = false
+
 local bigCorner = Instance.new("UICorner")
 bigCorner.CornerRadius = UDim.new(0, 6)
 bigCorner.Parent = bigEggBox
+---------------------------------------------------------
+-- START / STOP BUTTON
+---------------------------------------------------------
 
--- BUTTON START/STOP
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Parent = mainFrame
 toggleBtn.Position = UDim2.new(0, 12, 0, 102)
@@ -163,11 +211,15 @@ toggleBtn.Text = "START / RESUME"
 toggleBtn.Font = Enum.Font.GothamBold
 toggleBtn.TextSize = 14
 toggleBtn.TextColor3 = Color3.new(1, 1, 1)
+
 local toggleCorner = Instance.new("UICorner")
 toggleCorner.CornerRadius = UDim.new(0, 6)
 toggleCorner.Parent = toggleBtn
 
+---------------------------------------------------------
 -- STATS LABELS
+---------------------------------------------------------
+
 local statsContainer = Instance.new("Frame")
 statsContainer.Parent = mainFrame
 statsContainer.Position = UDim2.new(0, 12, 0, 142)
@@ -194,7 +246,10 @@ local lblLastBatch = makeLabel("Last Batch Time: -", 32)
 local lblStatus = makeLabel("Status: IDLE", 48)
 lblStatus.TextColor3 = Color3.fromRGB(255, 230, 120)
 
--- RESULT LIST
+---------------------------------------------------------
+-- RESULT LIST (SCROLLING)
+---------------------------------------------------------
+
 local scrollList = Instance.new("ScrollingFrame")
 scrollList.Parent = mainFrame
 scrollList.Position = UDim2.new(0, 12, 0, 220)
@@ -220,7 +275,10 @@ resultText.Font = Enum.Font.Code
 resultText.TextSize = 12
 resultText.Text = "Tekan START..."
 
--- ========== RESIZE HANDLE ==========
+---------------------------------------------------------
+-- RESIZE HANDLE (BOTTOM-RIGHT)
+---------------------------------------------------------
+
 local resizeHandle = Instance.new("Frame")
 resizeHandle.Parent = mainFrame
 resizeHandle.AnchorPoint = Vector2.new(1, 1)
@@ -262,50 +320,109 @@ UserInputService.InputEnded:Connect(function(input)
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if not isResizing then
-        return
-    end
+    if not isResizing then return end
     if input.UserInputType ~= Enum.UserInputType.MouseMovement
-        and input.UserInputType ~= Enum.UserInputType.Touch
-    then
-        return
-    end
+    and input.UserInputType ~= Enum.UserInputType.Touch then return end
 
     local currentPos = input.Position
     local delta = currentPos - lastInputPos
     lastInputPos = currentPos
 
-    local newW = math.clamp(mainFrame.Size.X.Offset + delta.X, 220, 520)
+    local newW = math.clamp(mainFrame.Size.X.Offset + delta.X, 260, 520)
     local newH = math.clamp(mainFrame.Size.Y.Offset + delta.Y, 260, 620)
 
     mainFrame.Size = UDim2.new(0, newW, 0, newH)
 end)
+---------------------------------------------------------
+-- UTILITY: FORMAT TIME (detik → HH:MM:SS)
+---------------------------------------------------------
 
--- ======================================================
--- FUNCTIONS
--- ======================================================
 local function formatTime(s)
     s = math.floor(s)
-    if s <= 0 then
-        return "00:00:00"
-    end
+    if s <= 0 then return "00:00:00" end
     local h = math.floor(s / 3600)
     local m = math.floor((s % 3600) / 60)
     local sec = s % 60
     return string.format("%02d:%02d:%02d", h, m, sec)
 end
 
+---------------------------------------------------------
+-- UTILITY: HAPUS HTML TAG DARI LABEL (ESP TEXT)
+---------------------------------------------------------
+
 local function cleanText(str)
     local clean = string.gsub(str, "<.->", "")
-    clean = string.match(clean, "^%s*(.-)%s*$")
+    clean = string.gsub(clean, "^%s*(.-)%s*$", "%1")
     return clean
 end
 
--- mapping tier berdasarkan KG
-local function getTier(kg)
-    if not kg then
-        return "Unknown", "#FFFFFF"
+---------------------------------------------------------
+-- PARSER: MENGAMBIL EGG NAME, PET NAME, DAN KG
+-- FORMAT YANG DIDUKUNG:
+-- "Rare Summer Egg Flamingo 1.78 KG"
+-- Egg Name selalu berakhir dengan kata "Egg"
+---------------------------------------------------------
+
+local function parseEggLine(text)
+    -- hilangkan newline dan html
+    text = cleanText(text)
+    text = string.gsub(text, "\n", " ")
+
+    local words = {}
+    for word in string.gmatch(text, "%S+") do
+        table.insert(words, word)
     end
+
+    -- cari index kata "Egg"
+    local eggIndex = nil
+    for i, w in ipairs(words) do
+        if w:lower() == "egg" then
+            eggIndex = i
+            break
+        end
+    end
+
+    if not eggIndex or eggIndex >= #words - 1 then
+        return nil, nil, nil  -- parsing gagal
+    end
+
+    -- egg name = semua kata sampai Egg
+    local eggWords = {}
+    for i = 1, eggIndex do
+        table.insert(eggWords, words[i])
+    end
+    local eggName = table.concat(eggWords, " ")
+
+    -- pet name = kata setelah Egg sampai sebelum angka KG
+    local petName = words[eggIndex + 1]
+
+    -- cari angka KG di akhir
+    local kg = nil
+    for i = #words, 1, -1 do
+        local num = tonumber(words[i])
+        if num then
+            kg = num
+            break
+        end
+    end
+
+    return eggName, petName, kg
+end
+
+---------------------------------------------------------
+-- TIER LOGIC BERDASARKAN KG
+-- Referensi dari table warna kamu:
+-- <3      = Normal
+-- 3–4.9   = Semi Huge
+-- 5–6.9   = Huge
+-- 7–7.9   = Semi Titanic
+-- 8–8.9   = Titanic
+-- 9–9.9   = Godly
+-- 10+     = Colossal
+---------------------------------------------------------
+
+local function getTier(kg)
+    if not kg then return "Unknown", "#FFFFFF" end
 
     if kg >= 10 then
         return "Colossal", "#FF8800"
@@ -324,153 +441,153 @@ local function getTier(kg)
     end
 end
 
--- ======================================================
--- WEBHOOK
--- ======================================================
-local function sendWebhook(dataList, count)
-    if not WEBHOOK_URL or WEBHOOK_URL == "MASUKAN_WEBHOOK_URL_DISINI" then
-        return
-    end
+---------------------------------------------------------
+-- BUILDING RICH TEXT LIST OF RESULTS FOR UI
+---------------------------------------------------------
 
-    lblStatus.Text = "Status: Mengirim Webhook..."
+local function buildResultList(normalEggs, bigEggs)
+    local result = ""
 
-    local runtimeStr = formatTime(tick() - sessionStartTime)
-
-    local contentStr = ""
-    for name, data in pairs(dataList) do
-        local tier, colorHex = getTier(data.maxKG)
-        contentStr = contentStr ..
-            string.format("[%s] %s x%s (%.1f KG)\n", tier, name, tostring(data.count), data.maxKG or 0)
-    end
-
-    -- ambil threshold dari GUI
-    local bigThreshold = tonumber(bigEggBox.Text) or BIG_EGG_DEFAULT
-
-    -- cek apakah ada big egg
-    local hasBigEgg = false
-    for name, data in pairs(dataList) do
-        local kgVal = data.maxKG or 0
-        if kgVal >= bigThreshold then
-            hasBigEgg = true
-            break
+    -----------------------------------------------------
+    -- NORMAL EGGS (Group: EggName -> PetName (count))
+    -----------------------------------------------------
+    for eggName, pets in pairs(normalEggs) do
+        for petName, info in pairs(pets) do
+            local tier, color = getTier(info.maxKG)
+            result = result .. string.format(
+                "• <font color='%s'>[%s]</font> %s -> %s (%d)\n",
+                color,
+                tier,
+                eggName,
+                petName,
+                info.count
+            )
         end
     end
 
-    local embedData = {
-        {
-            ["title"] = "Grow a Garden - Egg Notification",
-            ["description"] = hasBigEgg and "‼️ BIG EGG DETECTED ‼️" or "Egg Siap Dibuka!",
-            ["color"] = hasBigEgg and 16711680 or 65280,
-            ["fields"] = {
-                {["name"] = "⏱️ Runtime", ["value"] = runtimeStr, ["inline"] = true},
-                {["name"] = "🥚 Total Hatched", ["value"] = tostring(totalHatched), ["inline"] = true},
-                {["name"] = "⚡ Last Batch", ["value"] = lastBatchDuration, ["inline"] = true},
-                {["name"] = "📦 Isi Egg Batch Ini", ["value"] = contentStr, ["inline"] = false}
-            },
-            ["footer"] = {["text"] = "kambingnoob"},
-            ["timestamp"] = DateTime.now():ToIsoDate()
-        }
-    }
-
-    local payloadData = {
-        content = hasBigEgg and "@here" or nil,
-        embeds = embedData
-    }
-
-    local payload = HttpService:JSONEncode(payloadData)
-
-    request({
-        Url = WEBHOOK_URL,
-        Method = "POST",
-        Headers = {["Content-Type"] = "application/json"},
-        Body = payload
-    })
-
-    lblStatus.Text = "Status: Webhook Terkirim!"
-end
-
--- ======================================================
--- CORE LOGIC (SCANNER)
--- ======================================================
-local function scanGarden()
-    if not isRunning then
-        return
+    -----------------------------------------------------
+    -- BIG EGGS (Setiap egg tampil sendiri)
+    -----------------------------------------------------
+    for _, e in ipairs(bigEggs) do
+        local tier, color = getTier(e.kg)
+        result = result .. string.format(
+            "• <b><font color='%s'>[%s]</font></b> %s -> %s (%.1f KG)\n",
+            color,
+            tier,
+            e.eggName,
+            e.petName,
+            e.kg
+        )
     end
 
+    if result == "" then
+        return "Belum ada egg dengan KG."
+    end
+
+    return result
+end
+---------------------------------------------------------
+-- SCANNER:
+--   - Scan semua label ESP
+--   - Parse egg name, pet name, dan KG
+--   - Group Normal Eggs (< threshold)
+--   - Pisahkan Big Eggs (>= threshold)
+--   - Update GUI
+---------------------------------------------------------
+
+local function scanGarden()
+    if not isRunning then return end
+
+    -----------------------------------------------------
+    -- Update Timer UI
+    -----------------------------------------------------
     lblRuntime.Text = "Runtime: " .. formatTime(tick() - sessionStartTime)
 
     local target = tonumber(targetBox.Text) or DEFAULT_TARGET
+    local bigThreshold = tonumber(bigEggBox.Text) or DEFAULT_BIG_EGG_THRESHOLD
 
-    -- foundCounts[name] = {count = n, maxKG = x.x}
-    local foundCounts = {}
-    local foundTotal = 0
+    -----------------------------------------------------
+    -- TEMPORARY STORAGE
+    -----------------------------------------------------
+
+    -- normalEggs[eggName][petName] = {count=n, maxKG=x}
+    local normalEggs = {}
+
+    -- bigEggs = { {eggName, petName, kg} }
+    local bigEggs = {}
+
+    local totalReady = 0
+
+    -----------------------------------------------------
+    -- FIND ALL TEXTLABELS
+    -----------------------------------------------------
 
     local searchRoot = workspace:FindFirstChild("Farm") or workspace
 
     for _, obj in ipairs(searchRoot:GetDescendants()) do
-        if obj:IsA("TextLabel") and obj.Visible then
-            local isESP = false
+        if obj:IsA("TextLabel") and obj.Visible == true then
 
-            if string.find(obj.Text, "<font") then
-                isESP = true
-            elseif obj:FindFirstAncestorWhichIsA("BillboardGui") then
-                if string.len(obj.Text) > 2 and not tonumber(obj.Text) then
-                    isESP = true
-                end
-            end
+            local raw = obj.Text
+            if string.find(raw, "KG") then
+                -------------------------------------------------
+                -- PARSE eggName, petName, KG
+                -------------------------------------------------
+                local eggName, petName, kg = parseEggLine(raw)
+                if eggName and petName and kg then
 
-            if isESP then
-                local raw = cleanText(obj.Text)
-                local name = string.gsub(raw, "\n", " ")
+                    totalReady += 1
 
-                if name ~= "" and name ~= "..." and not string.find(name, "Status") then
-                    local kgStr = string.match(name, "([%d%.]+)%s*[Kk][Gg]")
-                    if kgStr then
-                        local kgVal = tonumber(kgStr) or 0
-                        foundTotal = foundTotal + 1
+                    -------------------------------------------------
+                    -- NORMAL egg (< threshold)
+                    -------------------------------------------------
+                    if kg < bigThreshold then
+                        normalEggs[eggName] = normalEggs[eggName] or {}
+                        normalEggs[eggName][petName] =
+                            normalEggs[eggName][petName] or {count = 0, maxKG = 0}
 
-                        if not foundCounts[name] then
-                            foundCounts[name] = {count = 0, maxKG = kgVal}
+                        normalEggs[eggName][petName].count += 1
+                        if kg > normalEggs[eggName][petName].maxKG then
+                            normalEggs[eggName][petName].maxKG = kg
                         end
-                        foundCounts[name].count = foundCounts[name].count + 1
-                        if kgVal > (foundCounts[name].maxKG or 0) then
-                            foundCounts[name].maxKG = kgVal
-                        end
+
+                    -------------------------------------------------
+                    -- BIG egg (>= threshold)
+                    -------------------------------------------------
+                    else
+                        table.insert(bigEggs, {
+                            eggName = eggName,
+                            petName = petName,
+                            kg = kg
+                        })
                     end
                 end
             end
         end
     end
 
-    -- UPDATE UI LIST (warna per tier)
-    local listStr = ""
-    for n, data in pairs(foundCounts) do
-        local tier, colorHex = getTier(data.maxKG)
-        listStr = listStr ..
-            string.format(
-                "• <font color='%s'>[%s]</font> %s: <b>%d</b> (%.1f KG)\n",
-                colorHex,
-                tier,
-                n,
-                data.count,
-                data.maxKG or 0
-            )
-    end
-    if listStr == "" then
-        listStr = "Belum ada egg dengan KG (belum ready)."
-    end
+    -----------------------------------------------------
+    -- UPDATE UI RESULT
+    -----------------------------------------------------
+
+    local listStr = buildResultList(normalEggs, bigEggs)
     resultText.Text = listStr
 
-    local lineCount = 0
-    for _ in pairs(foundCounts) do
-        lineCount = lineCount + 1
-    end
-    scrollList.CanvasSize =
-        UDim2.new(0, 0, 0, math.max(lineCount * 18 + 8, scrollList.AbsoluteWindowSize.Y))
+    local lineCount = select(2, listStr:gsub("\n", "\n"))
+    scrollList.CanvasSize = UDim2.new(
+        0, 0,
+        0, math.max(lineCount * 18 + 12, scrollList.AbsoluteWindowSize.Y)
+    )
 
-    -- LOGIC BATCH & WEBHOOK
-    if foundTotal >= target then
+    -----------------------------------------------------
+    -- WEBHOOK LOGIC
+    -----------------------------------------------------
+
+    if totalReady >= target then
         if not hasSentWebhook then
+
+            -----------------------------------------------------
+            -- HITUNG DURASI BATCH
+            -----------------------------------------------------
             local dur = tick() - batchStartTime
             if dur < 60 then
                 lastBatchDuration = math.floor(dur) .. "s"
@@ -479,30 +596,168 @@ local function scanGarden()
                     math.floor(dur / 60) .. "m " .. math.floor(dur % 60) .. "s"
             end
 
-            totalHatched = totalHatched + foundTotal
+            totalHatched += totalReady
 
             lblLastBatch.Text = "Last Batch Time: " .. lastBatchDuration
             lblHatched.Text = "Total Hatched: " .. totalHatched
 
-            sendWebhook(foundCounts, foundTotal)
+            -----------------------------------------------------
+            -- KIRIM WEBHOOK
+            -----------------------------------------------------
+            sendWebhook(normalEggs, bigEggs)
+
             hasSentWebhook = true
         end
+
     else
-        if hasSentWebhook and foundTotal < (target / 2) then
+        -----------------------------------------------------
+        -- Reset state jika batch sudah setengah turun
+        -----------------------------------------------------
+        if hasSentWebhook and totalReady < (target / 2) then
             hasSentWebhook = false
             batchStartTime = tick()
             lblStatus.Text = "Status: Reset. New Batch."
         elseif not hasSentWebhook then
-            lblStatus.Text = "Status: Mengisi (" .. foundTotal .. "/" .. target .. ")"
+            lblStatus.Text = "Status: Mengisi (" .. totalReady .. "/" .. target .. ")"
         end
     end
 end
+---------------------------------------------------------
+-- WEBHOOK SYSTEM (ANTI-SPAM BIG EGG)
+--  - normalEggs  : hasil grouping non-big
+--  - bigEggs     : daftar big egg (tidak digabung)
+--  - mention @here ONLY jika big egg baru muncul
+---------------------------------------------------------
 
--- ======================================================
--- BUTTON HANDLERS
--- ======================================================
+local function sendWebhook(normalEggs, bigEggs)
+    if not WEBHOOK_URL or WEBHOOK_URL == "" then
+        warn("Webhook URL tidak diisi.")
+        return
+    end
+
+    lblStatus.Text = "Status: Mengirim Webhook..."
+
+    local runtimeStr = formatTime(tick() - sessionStartTime)
+    local messageText = ""
+
+    local hasNewBigEgg = false
+
+    -----------------------------------------------------
+    -- CEK BIG EGG BARU (anti-spam)
+    -----------------------------------------------------
+    for _, big in ipairs(bigEggs) do
+        local key = makeBigEggKey(big.eggName, big.petName, big.kg)
+
+        if not notifiedBigEggs[key] then
+            hasNewBigEgg = true
+            notifiedBigEggs[key] = true   -- tandai sudah dikirim
+        end
+    end
+
+    -----------------------------------------------------
+    -- BUILD TEXT UNTUK EMBED (normal)
+    -----------------------------------------------------
+    for eggName, pets in pairs(normalEggs) do
+        for petName, info in pairs(pets) do
+            local tier, _ = getTier(info.maxKG)
+
+            messageText = messageText ..
+                string.format("[%s] %s -> %s (%d)\n",
+                    tier,
+                    eggName,
+                    petName,
+                    info.count
+                )
+        end
+    end
+
+    -----------------------------------------------------
+    -- BUILD TEXT UNTUK EMBED (big eggs)
+    -----------------------------------------------------
+    for _, big in ipairs(bigEggs) do
+        local tier, _ = getTier(big.kg)
+
+        messageText = messageText ..
+            string.format("[%s] %s -> %s (%.1f KG)\n",
+                tier,
+                big.eggName,
+                big.petName,
+                big.kg
+            )
+    end
+
+    if messageText == "" then
+        messageText = "Tidak ada egg ditemukan."
+    end
+
+    -----------------------------------------------------
+    -- WEBHOOK EMBED
+    -----------------------------------------------------
+
+    -- warna embed
+    local color = hasNewBigEgg and 16711680    -- merah untuk big egg
+                            or 65280           -- hijau default
+
+    local embedData = {
+        {
+            ["title"] = hasNewBigEgg
+                and "‼️ BIG EGG DETECTED ‼️"
+                or "Egg Batch Siap Dibuka",
+            ["description"] = "➤ Detail Batch\n\n" .. messageText,
+            ["color"] = color,
+
+            ["fields"] = {
+                {
+                    ["name"] = "⏱ Runtime",
+                    ["value"] = runtimeStr,
+                    ["inline"] = true
+                },
+                {
+                    ["name"] = "⚡ Last Batch",
+                    ["value"] = lastBatchDuration,
+                    ["inline"] = true
+                },
+                {
+                    ["name"] = "🥚 Total Hatched",
+                    ["value"] = tostring(totalHatched),
+                    ["inline"] = true
+                }
+            },
+
+            ["footer"] = {["text"] = "Garden Tracker"},
+            ["timestamp"] = DateTime.now():ToIsoDate()
+        }
+    }
+
+    -----------------------------------------------------
+    -- FINAL PAYLOAD
+    -----------------------------------------------------
+    local payload = {
+        content = hasNewBigEgg and "@here" or nil,  -- Hanya mention 1x
+        embeds = embedData
+    }
+
+    -----------------------------------------------------
+    -- SEND REQUEST
+    -----------------------------------------------------
+    request({
+        Url = WEBHOOK_URL,
+        Method = "POST",
+        Headers = {
+            ["Content-Type"] = "application/json"
+        },
+        Body = HttpService:JSONEncode(payload)
+    })
+
+    lblStatus.Text = "Status: Webhook Terkirim!"
+end
+---------------------------------------------------------
+-- BUTTON LOGIC: START / STOP
+---------------------------------------------------------
+
 toggleBtn.MouseButton1Click:Connect(function()
     isRunning = not isRunning
+
     if isRunning then
         toggleBtn.Text = "PAUSE / STOP"
         toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 70, 70)
@@ -512,12 +767,17 @@ toggleBtn.MouseButton1Click:Connect(function()
             batchStartTime = tick()
             lblStatus.Text = "Status: Started."
         end
+
     else
         toggleBtn.Text = "RESUME"
         toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 160, 100)
         lblStatus.Text = "Status: Paused."
     end
 end)
+
+---------------------------------------------------------
+-- CLOSE BUTTON
+---------------------------------------------------------
 
 closeBtn.MouseButton1Click:Connect(function()
     isRunning = false
@@ -526,13 +786,17 @@ closeBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+---------------------------------------------------------
+-- MINIMIZE BUTTON
+---------------------------------------------------------
+
 minimizeBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
 
     if isMinimized then
         minimizeBtn.Text = "+"
         originalSize = mainFrame.Size
-        mainFrame.Size = UDim2.new(0, 260, 0, 32)
+        mainFrame.Size = UDim2.new(0, 280, 0, 32) -- hanya title bar
 
         for _, child in ipairs(mainFrame:GetChildren()) do
             if child ~= title and child ~= closeBtn and child ~= minimizeBtn then
@@ -541,6 +805,7 @@ minimizeBtn.MouseButton1Click:Connect(function()
                 end
             end
         end
+
     else
         minimizeBtn.Text = "-"
         mainFrame.Size = originalSize
@@ -555,10 +820,13 @@ minimizeBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- LOOP
+---------------------------------------------------------
+-- MAIN BACKGROUND LOOP (SCANNER)
+---------------------------------------------------------
+
 task.spawn(function()
     while true do
         scanGarden()
-        task.wait(1)
+        task.wait(1) -- scan tiap 1 detik
     end
 end)
