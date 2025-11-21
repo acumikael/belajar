@@ -1,100 +1,127 @@
 -- ======================================================
--- EGG SPY v2 - GUI LOGGER EDITION (KHUSUS DELTA)
+-- EGG PREDICTION READER (Membaca ESP Orang Lain)
 -- ======================================================
 
 local Players = game:GetService("Players")
-local CoreGui = game:GetService("CoreGui")
 local player = Players.LocalPlayer
 
--- 1. MEMBERSIHKAN GUI LAMA
-if getgenv().SpyGui then getgenv().SpyGui:Destroy() end
-
--- 2. MEMBUAT LAYAR LOG (GUI)
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "EggSpyOverlay"
-screenGui.Parent = CoreGui -- Masuk ke CoreGui agar tidak tertutup UI game
-getgenv().SpyGui = screenGui
-
-local logFrame = Instance.new("ScrollingFrame")
-logFrame.Name = "LogWindow"
-logFrame.Parent = screenGui
-logFrame.Position = UDim2.new(0.6, 0, 0.3, 0) -- Posisi di Kanan Tengah
-logFrame.Size = UDim2.new(0.35, 0, 0.4, 0) -- Ukuran Kotak
-logFrame.BackgroundColor3 = Color3.new(0, 0, 0)
-logFrame.BackgroundTransparency = 0.3
-logFrame.CanvasSize = UDim2.new(0, 0, 10, 0) -- Bisa discroll
-logFrame.ScrollBarThickness = 6
-
--- Judul
-local title = Instance.new("TextLabel")
-title.Parent = screenGui
-title.Position = UDim2.new(0.6, 0, 0.25, 0)
-title.Size = UDim2.new(0.35, 0, 0.05, 0)
-title.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-title.Text = "EGG SPY LOG"
-title.TextColor3 = Color3.new(1, 1, 1)
-title.Font = Enum.Font.Code
-title.TextScaled = true
-
--- 3. FUNGSI LOG MANUAL (Mencetak teks ke layar HP)
-local function Log(text, color)
-    local label = Instance.new("TextLabel")
-    label.Parent = logFrame
-    label.Size = UDim2.new(1, -10, 0, 20)
-    label.Position = UDim2.new(0, 5, 0, (#logFrame:GetChildren() - 1) * 20)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = color or Color3.new(1, 1, 1)
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Text = text
-    label.Font = Enum.Font.Code
-    label.TextSize = 12
-    
-    -- Auto scroll ke bawah
-    logFrame.CanvasPosition = Vector2.new(0, 9999)
+-- 1. HAPUS GUI LAMA
+if player.PlayerGui:FindFirstChild("EggPredictionGui") then
+    player.PlayerGui.EggPredictionGui:Destroy()
 end
 
-Log("Script dimulai...", Color3.fromRGB(0, 255, 0))
+-- 2. SETUP GUI (Tampilan Kotak di Tengah Atas)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "EggPredictionGui"
+screenGui.Parent = player:WaitForChild("PlayerGui")
 
--- 4. LOGIKA UTAMA (SCANNING)
-task.spawn(function()
-    -- Coba akses folder
-    local success, result = pcall(function()
-        return workspace.Farm.Farm.Objects_Physical
-    end)
+local infoBox = Instance.new("Frame")
+infoBox.Name = "InfoBox"
+infoBox.Parent = screenGui
+infoBox.AnchorPoint = Vector2.new(0.5, 0) 
+infoBox.Position = UDim2.new(0.5, 0, 0.12, 0) -- Posisi di bawah penghitung pet
+infoBox.Size = UDim2.new(0, 180, 0, 100) -- Ukuran kotak
+infoBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+infoBox.BackgroundTransparency = 0.3
+infoBox.BorderColor3 = Color3.fromRGB(0, 255, 100)
+infoBox.BorderSizePixel = 2
 
-    if not success or not result then
-        Log("ERROR: Folder tidak ketemu!", Color3.fromRGB(255, 0, 0))
-        Log("Coba cek ulang nama folder.", Color3.fromRGB(255, 0, 0))
-        return
-    end
+local title = Instance.new("TextLabel")
+title.Parent = infoBox
+title.Size = UDim2.new(1, 0, 0, 25)
+title.BackgroundTransparency = 1
+title.Text = "PREDIKSI ISI KEBUN"
+title.TextColor3 = Color3.fromRGB(0, 255, 100)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
 
-    local physicalFolder = result
-    Log("Folder 'Objects_Physical' OK!", Color3.fromRGB(0, 255, 0))
-    Log("Sedang memantau telur...", Color3.fromRGB(255, 255, 0))
+local listLabel = Instance.new("TextLabel")
+listLabel.Parent = infoBox
+listLabel.Position = UDim2.new(0, 10, 0, 30)
+listLabel.Size = UDim2.new(1, -20, 1, -35)
+listLabel.BackgroundTransparency = 1
+listLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+listLabel.Font = Enum.Font.Code
+listLabel.TextSize = 13
+listLabel.TextXAlignment = Enum.TextXAlignment.Left
+listLabel.TextYAlignment = Enum.TextYAlignment.Top
+listLabel.Text = "Scanning..."
+listLabel.RichText = true -- Agar bisa baca format tebal
 
-    local eggCount = 0
+-- 3. FUNGSI MEMBERSIHKAN TEKS HTML
+-- Mengubah "<font color=...>Cow</font>" menjadi "Cow"
+local function cleanText(str)
+    -- Hapus semua tag <...>
+    local clean = string.gsub(str, "<.->", "")
+    -- Hapus spasi berlebih di awal/akhir
+    clean = string.match(clean, "^%s*(.-)%s*$")
+    return clean
+end
 
-    -- Scan semua telur
-    for _, eggModel in ipairs(physicalFolder:GetDescendants()) do
-        if eggModel:IsA("Model") and string.find(eggModel.Name, "Egg") then
-            eggCount = eggCount + 1
-            
-            -- Pasang pendengar (Listener)
-            eggModel.ChildAdded:Connect(function(child)
-                Log("DETECT: Ada yg masuk ke " .. eggModel.Name, Color3.fromRGB(0, 255, 255))
-                Log(" > Nama: " .. child.Name, Color3.fromRGB(255, 255, 255))
-                Log(" > Tipe: " .. child.ClassName, Color3.fromRGB(200, 200, 200))
-            end)
-
-            eggModel.DescendantAdded:Connect(function(descendant)
-                -- Filter spam
-                if descendant.Name ~= "Part" and descendant.Name ~= "TouchInterest" then
-                    Log("DEEP: " .. descendant.Name .. " (di " .. eggModel.Name .. ")", Color3.fromRGB(255, 170, 0))
+-- 4. LOGIKA UTAMA (SCANNER)
+local function updatePredictions()
+    local counts = {}
+    local totalFound = 0
+    
+    -- Target Folder (Sesuai gambar Anda)
+    local farmFolder = workspace:FindFirstChild("Farm") and workspace.Farm:FindFirstChild("Farm") and workspace.Farm.Farm:FindFirstChild("Objects_Physical")
+    
+    if farmFolder then
+        -- Cari semua TextLabel di dalam folder Objects_Physical
+        for _, obj in ipairs(farmFolder:GetDescendants()) do
+            -- Kita cari TextLabel yang induknya bernama "BillboardGui"
+            -- Dan kakeknya bernama "ESP" (Sesuai struktur gambar Anda)
+            if obj:IsA("TextLabel") and obj.Parent:IsA("BillboardGui") then
+                
+                -- Ambil teks asli
+                local rawText = obj.Text
+                
+                -- Bersihkan teks dari kode warna HTML
+                local petName = cleanText(rawText)
+                
+                -- Filter teks kosong atau placeholder
+                if petName ~= "" and petName ~= "..." then
+                    totalFound = totalFound + 1
+                    
+                    -- Masukkan ke hitungan
+                    if counts[petName] then
+                        counts[petName] = counts[petName] + 1
+                    else
+                        counts[petName] = 1
+                    end
                 end
-            end)
+            end
         end
     end
 
-    Log("Memantau " .. eggCount .. " telur.", Color3.fromRGB(0, 255, 0))
-    Log("Silakan Buka Telur sekarang!", Color3.fromRGB(255, 255, 255))
+    -- 5. FORMAT TAMPILAN
+    local displayText = ""
+    
+    -- Urutkan nama pet secara abjad
+    local sortedNames = {}
+    for name in pairs(counts) do table.insert(sortedNames, name) end
+    table.sort(sortedNames)
+    
+    -- Susun teks
+    for _, name in ipairs(sortedNames) do
+        displayText = displayText .. "• " .. name .. ": <b>" .. counts[name] .. "</b>\n"
+    end
+    
+    if totalFound == 0 then
+        listLabel.Text = "Menunggu Script ESP..."
+    else
+        listLabel.Text = displayText
+        -- Auto resize kotak sesuai isi teks
+        local lineCount = #sortedNames
+        infoBox.Size = UDim2.new(0, 180, 0, 35 + (lineCount * 15))
+    end
+end
+
+-- 6. LOOPING OTOMATIS
+-- Kita gunakan loop "While" agar terus update setiap detik
+task.spawn(function()
+    while true do
+        updatePredictions()
+        task.wait(1) -- Update setiap 1 detik
+    end
 end)
