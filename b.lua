@@ -97,11 +97,11 @@ local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Parent = screenGui
 toggleButton.AnchorPoint = Vector2.new(0, 0.5)
-toggleButton.Position = UDim2.new(0, 10, 0.5, 0)
+toggleButton.Position = UDim2.new(0, 10, 0.3, 0)
 toggleButton.Size = UDim2.new(0, 50, 0, 50)
 toggleButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 toggleButton.BorderSizePixel = 0
-toggleButton.Text = "🌱"
+toggleButton.Text = "🐐"
 toggleButton.TextSize = 24
 toggleButton.Font = Enum.Font.GothamBold
 
