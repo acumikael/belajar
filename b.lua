@@ -97,7 +97,7 @@ local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Parent = screenGui
 toggleButton.AnchorPoint = Vector2.new(0, 0.5)
-toggleButton.Position = UDim2.new(0, 10, 0.3, 0)
+toggleButton.Position = UDim2.new(0, 10, 0.23, 0)
 toggleButton.Size = UDim2.new(0, 50, 0, 50)
 toggleButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 toggleButton.BorderSizePixel = 0
@@ -148,7 +148,7 @@ local title = Instance.new("TextLabel")
 title.Parent = mainFrame
 title.Size = UDim2.new(1, 0, 0, 32)
 title.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-title.Text = "Garden Tracker V0.4"
+title.Text = "Garden Tracker V0.5"
 title.TextColor3 = Color3.fromRGB(235, 235, 235)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -342,7 +342,7 @@ local function toggleGui()
             mainFrame.Visible = false
         end)
         
-        toggleButton.Text = "🌱"
+        toggleButton.Text = "🐐"
     end
 end
 
@@ -429,13 +429,25 @@ end
 -- DETECT TIMER (LUCKY EGG BACK)
 ---------------------------------------------------------
 
+local DEBUG_MODE = true -- Set false untuk disable debug
+local debugTexts = {}
+
 local function detectTimers()
     local timerCount = 0
     local searchRoot = workspace:FindFirstChild("Farm") or workspace
     
+    if DEBUG_MODE then
+        debugTexts = {} -- Clear previous debug
+    end
+    
     for _, obj in ipairs(searchRoot:GetDescendants()) do
         if obj:IsA("TextLabel") and obj.Visible == true then
             local text = cleanText(obj.Text)
+            
+            -- Debug: Simpan semua text yang mengandung ":"
+            if DEBUG_MODE and string.find(text, ":") and not string.find(text, "KG") then
+                table.insert(debugTexts, text)
+            end
             
             -- Cek format timer: 
             -- Format menit:detik -> "00:30", "15:45"
@@ -629,7 +641,12 @@ local function scanGarden()
                 end
             else
                 -- Tidak ada timer terdeteksi, tampilkan status
-                lblStatus.Text = "Status: Menunggu Timer... (0 detected)"
+                if DEBUG_MODE and #debugTexts > 0 then
+                    local debugStr = table.concat(debugTexts, ", ")
+                    lblStatus.Text = "Status: Menunggu Timer... (0 detected)\nDebug: " .. debugStr
+                else
+                    lblStatus.Text = "Status: Menunggu Timer... (0 detected)"
+                end
             end
         end
     else
