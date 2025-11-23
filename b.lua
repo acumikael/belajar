@@ -2,9 +2,8 @@
     GARDEN TRACKER V0.4 (TOGGLE UI + LUCKY EGG BACK)
     New Features:
     - Toggle button di kiri tengah untuk buka/tutup GUI
-    - Lucky Egg Back detection (menunggu timer muncul setelah ready)
-    - Countdown 3 detik setelah timer terdeteksi
-    - Menampilkan jumlah lucky egg back di webhook
+    - Lucky Egg Back detection dengan countdown 25 detik
+    - Menghitung egg yang MASIH ADA di farm setelah 25 detik
 ]]--
 
 ---------------------------------------------------------
@@ -25,7 +24,6 @@ local TweenService = game:GetService("TweenService")
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1417836981353713684/yPh7jTLDmX7n_rj2-KOanHl6iPGDlvUpHJeCZG90pFOG0NQrwQ6c_e94_tOFRRJ6_sYJ"
 local DEFAULT_TARGET = 13
 local DEFAULT_BIG_EGG_THRESHOLD = 3
-local TIMER_WAIT_SECONDS = 4
 
 ---------------------------------------------------------
 -- HELPER: SAFE HTTP REQUEST
@@ -69,9 +67,11 @@ local hasSentWebhook = false
 local notifiedBigEggs = {}
 
 -- Lucky Egg Back States
-local isWaitingForTimer = false
-local timerDetectedTime = 0
+local isWaitingForCount = false
+local countdownStartTime = 0
+local initialEggCount = 0
 local luckyEggBackCount = 0
+local COUNTDOWN_SECONDS = 25
 
 local function makeBigEggKey(eggName, petName, kg)
     return string.format("%s|%s|%.1f", eggName, petName, kg)
@@ -97,11 +97,11 @@ local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Parent = screenGui
 toggleButton.AnchorPoint = Vector2.new(0, 0.5)
-toggleButton.Position = UDim2.new(0, 10, 0.23, 0)
+toggleButton.Position = UDim2.new(0, 10, 0.2, 0)
 toggleButton.Size = UDim2.new(0, 50, 0, 50)
 toggleButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 toggleButton.BorderSizePixel = 0
-toggleButton.Text = "🐐"
+toggleButton.Text = "🌱"
 toggleButton.TextSize = 24
 toggleButton.Font = Enum.Font.GothamBold
 
@@ -148,7 +148,7 @@ local title = Instance.new("TextLabel")
 title.Parent = mainFrame
 title.Size = UDim2.new(1, 0, 0, 32)
 title.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-title.Text = "Garden Tracker V0.5"
+title.Text = "Garden Tracker V0.4"
 title.TextColor3 = Color3.fromRGB(235, 235, 235)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -342,7 +342,7 @@ local function toggleGui()
             mainFrame.Visible = false
         end)
         
-        toggleButton.Text = "🐐"
+        toggleButton.Text = "🌱"
     end
 end
 
@@ -426,51 +426,24 @@ local function buildResultList(normalEggs, bigEggs)
 end
 
 ---------------------------------------------------------
--- DETECT TIMER (LUCKY EGG BACK)
+-- COUNT EGGS IN FARM
 ---------------------------------------------------------
 
-local DEBUG_MODE = true -- Set false untuk disable debug
-local debugTexts = {}
-
-local function detectTimers()
-    local timerCount = 0
+local function countEggsInFarm()
+    local eggCount = 0
     local searchRoot = workspace:FindFirstChild("Farm") or workspace
-    
-    if DEBUG_MODE then
-        debugTexts = {} -- Clear previous debug
-    end
     
     for _, obj in ipairs(searchRoot:GetDescendants()) do
         if obj:IsA("TextLabel") and obj.Visible == true then
-            local text = cleanText(obj.Text)
-            
-            -- Debug: Simpan semua text yang mengandung ":"
-            if DEBUG_MODE and string.find(text, ":") and not string.find(text, "KG") then
-                table.insert(debugTexts, text)
-            end
-            
-            -- Cek format timer: 
-            -- Format menit:detik -> "00:30", "15:45"
-            -- Format jam:menit:detik -> "01:30:00", "2:15:30"
-            -- Pastikan tidak mengandung "KG" dan bukan angka biasa
-            local hasTimerFormat = false
-            
-            -- Cek format jam:menit:detik (contoh: 01:30:00, 2:15:45)
-            if string.match(text, "^%d+:%d+:%d+$") then
-                hasTimerFormat = true
-            -- Cek format menit:detik (contoh: 00:30, 15:45)
-            elseif string.match(text, "^%d+:%d+$") then
-                hasTimerFormat = true
-            end
-            
-            -- Pastikan bukan format KG atau text lain yang mengandung ":"
-            if hasTimerFormat and not string.find(text, "KG") and not string.find(text, "Egg") then
-                timerCount = timerCount + 1
+            local raw = obj.Text
+            -- Hitung semua egg (baik yang KG maupun timer)
+            if string.find(raw, "Egg") or string.find(raw, "KG") or string.match(raw, "%d+:%d+") then
+                eggCount = eggCount + 1
             end
         end
     end
     
-    return timerCount
+    return eggCount
 end
 
 ---------------------------------------------------------
@@ -598,67 +571,59 @@ local function scanGarden()
     local lineCount = select(2, listStr:gsub("\n", "\n"))
     scrollList.CanvasSize = UDim2.new(0, 0, 0, math.max(lineCount * 18 + 12, scrollList.AbsoluteWindowSize.Y))
 
-    -- LOGIC BARU: Lucky Egg Back Detection
+    -- LOGIC BARU: Lucky Egg Back Detection (25 detik countdown)
     if totalReady >= target then
-        if not isWaitingForTimer and not hasSentWebhook then
-            -- Semua egg ready, mulai tunggu timer
-            isWaitingForTimer = true
-            timerDetectedTime = 0
+        if not isWaitingForCount and not hasSentWebhook then
+            -- Semua egg ready, mulai countdown 25 detik
+            isWaitingForCount = true
+            countdownStartTime = tick()
+            initialEggCount = totalReady
             luckyEggBackCount = 0
-            lblStatus.Text = "Status: Menunggu Timer..."
-        elseif isWaitingForTimer and not hasSentWebhook then
-            -- Cek apakah sudah ada timer
-            local timerCount = detectTimers()
+            lblStatus.Text = "Status: Countdown 25s dimulai..."
+        elseif isWaitingForCount and not hasSentWebhook then
+            -- Hitung sisa waktu countdown
+            local elapsed = tick() - countdownStartTime
+            local remaining = COUNTDOWN_SECONDS - elapsed
             
-            if timerCount > 0 then
-                -- Timer terdeteksi!
-                if timerDetectedTime == 0 then
-                    timerDetectedTime = tick()
-                    luckyEggBackCount = timerCount
-                    lblLuckyBack.Text = "Lucky Egg Back: " .. luckyEggBackCount
-                end
-                
-                -- Tunggu 3 detik setelah timer terdeteksi
-                local waitTime = tick() - timerDetectedTime
-                local remainingTime = TIMER_WAIT_SECONDS - waitTime
-                
-                if remainingTime > 0 then
-                    lblStatus.Text = string.format("Status: Timer Detected! (%d) Wait %.1fs...", timerCount, remainingTime)
-                else
-                    -- Kirim webhook setelah 3 detik
-                    local dur = tick() - batchStartTime
-                    if dur < 60 then lastBatchDuration = math.floor(dur) .. "s"
-                    else lastBatchDuration = math.floor(dur / 60) .. "m " .. math.floor(dur % 60) .. "s" end
-                    
-                    totalHatched += totalReady
-                    lblLastBatch.Text = "Last Batch Time: " .. lastBatchDuration
-                    lblHatched.Text = "Total Hatched: " .. totalHatched
-                    
-                    sendWebhook(normalEggs, bigEggs, luckyEggBackCount)
-                    hasSentWebhook = true
-                    isWaitingForTimer = false
-                    timerDetectedTime = 0
-                end
+            if remaining > 0 then
+                -- Masih dalam countdown
+                lblStatus.Text = string.format("Status: Countdown %.0fs... (Initial: %d eggs)", remaining, initialEggCount)
             else
-                -- Tidak ada timer terdeteksi, tampilkan status
-                if DEBUG_MODE and #debugTexts > 0 then
-                    local debugStr = table.concat(debugTexts, ", ")
-                    lblStatus.Text = "Status: Menunggu Timer... (0 detected)\nDebug: " .. debugStr
-                else
-                    lblStatus.Text = "Status: Menunggu Timer... (0 detected)"
-                end
+                -- Countdown selesai, hitung egg yang masih ada
+                local currentEggCount = countEggsInFarm()
+                luckyEggBackCount = currentEggCount  -- Yang masih ada = Lucky Egg Back
+                
+                if luckyEggBackCount < 0 then luckyEggBackCount = 0 end
+                
+                lblLuckyBack.Text = "Lucky Egg Back: " .. luckyEggBackCount
+                lblStatus.Text = string.format("Status: Lucky Egg Back = %d eggs", luckyEggBackCount)
+                
+                -- Kirim webhook
+                local dur = tick() - batchStartTime
+                if dur < 60 then lastBatchDuration = math.floor(dur) .. "s"
+                else lastBatchDuration = math.floor(dur / 60) .. "m " .. math.floor(dur % 60) .. "s" end
+                
+                totalHatched += totalReady
+                lblLastBatch.Text = "Last Batch Time: " .. lastBatchDuration
+                lblHatched.Text = "Total Hatched: " .. totalHatched
+                
+                sendWebhook(normalEggs, bigEggs, luckyEggBackCount)
+                hasSentWebhook = true
+                isWaitingForCount = false
+                countdownStartTime = 0
             end
         end
     else
         -- Reset jika jumlah egg turun drastis (sudah dibuka)
         if hasSentWebhook and totalReady < (target / 2) then
             hasSentWebhook = false
-            isWaitingForTimer = false
-            timerDetectedTime = 0
+            isWaitingForCount = false
+            countdownStartTime = 0
             luckyEggBackCount = 0
+            initialEggCount = 0
             batchStartTime = tick()
             lblStatus.Text = "Status: Reset. New Batch."
-        elseif not hasSentWebhook and not isWaitingForTimer then
+        elseif not hasSentWebhook and not isWaitingForCount then
             lblStatus.Text = "Status: Mengisi (" .. totalReady .. "/" .. target .. ")"
         end
     end
