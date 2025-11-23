@@ -22,7 +22,7 @@ local TweenService = game:GetService("TweenService")
 ---------------------------------------------------------
 
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1417836981353713684/yPh7jTLDmX7n_rj2-KOanHl6iPGDlvUpHJeCZG90pFOG0NQrwQ6c_e94_tOFRRJ6_sYJ"
-local DEFAULT_TARGET = 13
+local DEFAULT_TARGET = 8
 local DEFAULT_BIG_EGG_THRESHOLD = 3
 local DEBUG_MODE = true  -- Set false untuk disable debug
 
@@ -102,7 +102,7 @@ toggleButton.Position = UDim2.new(0, 10, 0.5, 0)
 toggleButton.Size = UDim2.new(0, 50, 0, 50)
 toggleButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 toggleButton.BorderSizePixel = 0
-toggleButton.Text = "69"
+toggleButton.Text = "🌱"
 toggleButton.TextSize = 24
 toggleButton.Font = Enum.Font.GothamBold
 
@@ -612,8 +612,11 @@ local function scanGarden()
             local remaining = COUNTDOWN_SECONDS - elapsed
             
             if remaining > 0 then
-                -- Masih dalam countdown
+                -- Masih dalam countdown - JANGAN RESET meskipun totalReady turun
                 lblStatus.Text = string.format("Status: Countdown %.0fs... (Initial: %d eggs)", remaining, initialEggCount)
+                if DEBUG_MODE then
+                    lblDebug.Text = string.format("Debug: COUNTDOWN | Ready=%d | Wait=%.0fs", totalReady, remaining)
+                end
             else
                 -- Countdown selesai, hitung egg yang masih ada
                 local currentEggCount = countEggsInFarm()
@@ -641,11 +644,16 @@ local function scanGarden()
                 hasSentWebhook = true
                 isWaitingForCount = false
                 countdownStartTime = 0
+                
+                if DEBUG_MODE then
+                    lblDebug.Text = "Debug: WEBHOOK SENT | Waiting for reset..."
+                end
             end
         end
     else
-        -- Reset jika egg berkurang (sudah di-hatch atau countdown selesai)
-        if (hasSentWebhook or isWaitingForCount) and totalReady < target then
+        -- Reset HANYA jika sudah kirim webhook ATAU belum mulai countdown
+        if hasSentWebhook and totalReady < target then
+            -- Reset setelah webhook dikirim dan egg berkurang
             if DEBUG_MODE then
                 lblDebug.Text = string.format("Debug: RESET | Ready=%d < Target=%d", totalReady, target)
             end
@@ -657,8 +665,10 @@ local function scanGarden()
             batchStartTime = tick()
             lblStatus.Text = "Status: Reset. New Batch."
         elseif not hasSentWebhook and not isWaitingForCount then
+            -- Status normal mengisi
             lblStatus.Text = "Status: Mengisi (" .. totalReady .. "/" .. target .. ")"
         end
+        -- PENTING: Jika isWaitingForCount = true, JANGAN reset! Biarkan countdown selesai dulu
     end
 end
 
