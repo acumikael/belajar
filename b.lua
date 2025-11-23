@@ -129,8 +129,8 @@ local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.Parent = screenGui
 mainFrame.AnchorPoint = Vector2.new(0, 0.5)
-mainFrame.Position = UDim2.new(0, -300, 0.5, 0) -- Hidden initially
-mainFrame.Size = UDim2.new(0, 280, 0, 420)
+mainFrame.Position = UDim2.new(0, -350, 0.5, 0) -- Hidden initially
+mainFrame.Size = UDim2.new(0, 340, 0, 360)
 mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -300,6 +300,7 @@ scrollList.Size = UDim2.new(1, -24, 1, -264)
 scrollList.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
 scrollList.CanvasSize = UDim2.new(0, 0, 0, 0)
 scrollList.ScrollBarThickness = 4
+scrollList.Visible = false  -- Hide scroll list untuk hemat space
 
 local scrollCorner = Instance.new("UICorner")
 scrollCorner.CornerRadius = UDim.new(0, 6)
@@ -317,6 +318,38 @@ resultText.RichText = true
 resultText.Font = Enum.Font.Code
 resultText.TextSize = 12
 resultText.Text = "Tekan START..."
+
+---------------------------------------------------------
+-- SHOW/HIDE RESULT LIST BUTTON
+---------------------------------------------------------
+
+local toggleResultBtn = Instance.new("TextButton")
+toggleResultBtn.Parent = mainFrame
+toggleResultBtn.Position = UDim2.new(0, 12, 0, 252)
+toggleResultBtn.Size = UDim2.new(1, -24, 0, 24)
+toggleResultBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+toggleResultBtn.Text = "📋 Show Details"
+toggleResultBtn.Font = Enum.Font.GothamBold
+toggleResultBtn.TextSize = 11
+toggleResultBtn.TextColor3 = Color3.new(1, 1, 1)
+
+local toggleResultCorner = Instance.new("UICorner")
+toggleResultCorner.CornerRadius = UDim.new(0, 6)
+toggleResultCorner.Parent = toggleResultBtn
+
+toggleResultBtn.MouseButton1Click:Connect(function()
+    scrollList.Visible = not scrollList.Visible
+    if scrollList.Visible then
+        toggleResultBtn.Text = "📋 Hide Details"
+        mainFrame.Size = UDim2.new(0, 340, 0, 480)
+        toggleResultBtn.Position = UDim2.new(0, 12, 0, 252)
+        scrollList.Position = UDim2.new(0, 12, 0, 282)
+        scrollList.Size = UDim2.new(1, -24, 1, -294)
+    else
+        toggleResultBtn.Text = "📋 Show Details"
+        mainFrame.Size = UDim2.new(0, 340, 0, 360)
+    end
+end)
 
 ---------------------------------------------------------
 -- TOGGLE GUI ANIMATION
@@ -339,7 +372,7 @@ local function toggleGui()
     else
         local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
         local tween = TweenService:Create(mainFrame, tweenInfo, {
-            Position = UDim2.new(0, -300, 0.5, 0)
+            Position = UDim2.new(0, -350, 0.5, 0)
         })
         tween:Play()
         tween.Completed:Connect(function()
@@ -430,33 +463,45 @@ local function buildResultList(normalEggs, bigEggs)
 end
 
 ---------------------------------------------------------
--- COUNT EGGS IN FARM (Sama seperti scan logic, hanya hitung "Egg")
+-- COUNT EGGS IN FARM (Menghitung SEMUA egg termasuk yang jadi timer)
 ---------------------------------------------------------
 
 local lastDebugInfo = ""
 
 local function countEggsInFarm()
     local eggCount = 0
+    local eggWithKG = 0
+    local eggWithTimer = 0
     local debugTexts = {}
     local searchRoot = workspace:FindFirstChild("Farm") or workspace
     
     for _, obj in ipairs(searchRoot:GetDescendants()) do
         if obj:IsA("TextLabel") and obj.Visible == true then
             local raw = obj.Text
-            -- Hitung hanya yang ada tulisan "Egg" (tidak peduli KG atau timer)
+            local cleanedText = cleanText(raw)
+            
+            -- Hitung egg yang ada tulisan "Egg" 
             if string.find(raw, "Egg") then
                 eggCount = eggCount + 1
-                if DEBUG_MODE and #debugTexts < 5 then
-                    table.insert(debugTexts, raw)
+                
+                -- Kategorikan: apakah masih punya KG atau sudah jadi timer
+                if string.find(raw, "KG") then
+                    eggWithKG = eggWithKG + 1
+                else
+                    eggWithTimer = eggWithTimer + 1
+                end
+                
+                if DEBUG_MODE and #debugTexts < 3 then
+                    table.insert(debugTexts, cleanedText:sub(1, 20))
                 end
             end
         end
     end
     
     if DEBUG_MODE then
-        lastDebugInfo = "Eggs found: " .. eggCount
+        lastDebugInfo = string.format("Total:%d (KG:%d, Timer:%d)", eggCount, eggWithKG, eggWithTimer)
         if #debugTexts > 0 then
-            lastDebugInfo = lastDebugInfo .. " | Samples: " .. table.concat(debugTexts, ", ")
+            lastDebugInfo = lastDebugInfo .. " | Ex: " .. table.concat(debugTexts, ", ")
         end
     end
     
@@ -590,12 +635,64 @@ local function scanGarden()
 
     -- Update debug info
     if DEBUG_MODE then
-        lblDebug.Text = string.format("Debug: Ready=%d | Target=%d | Waiting=%s | Sent=%s", 
-            totalReady, target, tostring(isWaitingForCount), tostring(hasSentWebhook))
+        local countdownStatus = isWaitingForCount and "YES" or "NO"
+        local webhookStatus = hasSentWebhook and "YES" or "NO"
+        lblDebug.Text = string.format("Debug: Ready(KG)=%d | Target=%d | Countdown=%s | Sent=%s", 
+            totalReady, target, countdownStatus, webhookStatus)
     end
 
     -- LOGIC BARU: Lucky Egg Back Detection (25 detik countdown)
-    if totalReady >= target then
+    -- PENTING: Jika countdown sedang jalan, HARUS diselesaikan dulu!
+    if isWaitingForCount and not hasSentWebhook then
+        -- Countdown sedang jalan - PRIORITAS TERTINGGI
+        local elapsed = tick() - countdownStartTime
+        local remaining = COUNTDOWN_SECONDS - elapsed
+        
+        if remaining > 0 then
+            -- Masih dalam countdown - JANGAN RESET meskipun totalReady turun
+            lblStatus.Text = string.format("Status: Countdown %.0fs... (Initial: %d eggs)", remaining, initialEggCount)
+            if DEBUG_MODE then
+                lblDebug.Text = string.format("Debug: COUNTDOWN | Ready=%d | Wait=%.0fs | LOCKED", totalReady, remaining)
+            end
+        else
+            -- Countdown selesai, hitung egg yang masih ada
+            local currentEggCount = countEggsInFarm()
+            luckyEggBackCount = currentEggCount  -- Yang masih ada = Lucky Egg Back
+            
+            if luckyEggBackCount < 0 then luckyEggBackCount = 0 end
+            
+            lblLuckyBack.Text = "Lucky Egg Back: " .. luckyEggBackCount
+            lblStatus.Text = string.format("Status: Sending webhook...", luckyEggBackCount)
+            
+            if DEBUG_MODE then
+                lblDebug.Text = string.format("Debug: COUNTDOWN END | %s", lastDebugInfo)
+            end
+            
+            -- Kirim webhook
+            local dur = tick() - batchStartTime
+            if dur < 60 then lastBatchDuration = math.floor(dur) .. "s"
+            else lastBatchDuration = math.floor(dur / 60) .. "m " .. math.floor(dur % 60) .. "s" end
+            
+            totalHatched += initialEggCount  -- Pakai initialEggCount bukan totalReady
+            lblLastBatch.Text = "Last Batch Time: " .. lastBatchDuration
+            lblHatched.Text = "Total Hatched: " .. totalHatched
+            
+            sendWebhook(normalEggs, bigEggs, luckyEggBackCount)
+            
+            -- PENTING: Set flag dulu sebelum reset
+            hasSentWebhook = true
+            isWaitingForCount = false
+            countdownStartTime = 0
+            
+            if DEBUG_MODE then
+                lblDebug.Text = "Debug: WEBHOOK SENT | Ready for reset"
+            end
+            
+            -- Force check untuk trigger reset di iterasi berikutnya
+            task.wait(0.5)
+        end
+    elseif totalReady >= target then
+        -- Egg ready mencapai target dan belum countdown
         if not isWaitingForCount and not hasSentWebhook then
             -- Semua egg ready, mulai countdown 25 detik
             isWaitingForCount = true
@@ -605,49 +702,6 @@ local function scanGarden()
             lblStatus.Text = "Status: Countdown 25s dimulai..."
             if DEBUG_MODE then
                 lblDebug.Text = string.format("Debug: START COUNTDOWN | Initial=%d eggs", initialEggCount)
-            end
-        elseif isWaitingForCount and not hasSentWebhook then
-            -- Hitung sisa waktu countdown
-            local elapsed = tick() - countdownStartTime
-            local remaining = COUNTDOWN_SECONDS - elapsed
-            
-            if remaining > 0 then
-                -- Masih dalam countdown - JANGAN RESET meskipun totalReady turun
-                lblStatus.Text = string.format("Status: Countdown %.0fs... (Initial: %d eggs)", remaining, initialEggCount)
-                if DEBUG_MODE then
-                    lblDebug.Text = string.format("Debug: COUNTDOWN | Ready=%d | Wait=%.0fs", totalReady, remaining)
-                end
-            else
-                -- Countdown selesai, hitung egg yang masih ada
-                local currentEggCount = countEggsInFarm()
-                luckyEggBackCount = currentEggCount  -- Yang masih ada = Lucky Egg Back
-                
-                if luckyEggBackCount < 0 then luckyEggBackCount = 0 end
-                
-                lblLuckyBack.Text = "Lucky Egg Back: " .. luckyEggBackCount
-                lblStatus.Text = string.format("Status: Lucky Egg Back = %d eggs", luckyEggBackCount)
-                
-                if DEBUG_MODE then
-                    lblDebug.Text = string.format("Debug: COUNTDOWN END | %s", lastDebugInfo)
-                end
-                
-                -- Kirim webhook
-                local dur = tick() - batchStartTime
-                if dur < 60 then lastBatchDuration = math.floor(dur) .. "s"
-                else lastBatchDuration = math.floor(dur / 60) .. "m " .. math.floor(dur % 60) .. "s" end
-                
-                totalHatched += initialEggCount  -- Pakai initialEggCount bukan totalReady
-                lblLastBatch.Text = "Last Batch Time: " .. lastBatchDuration
-                lblHatched.Text = "Total Hatched: " .. totalHatched
-                
-                sendWebhook(normalEggs, bigEggs, luckyEggBackCount)
-                hasSentWebhook = true
-                isWaitingForCount = false
-                countdownStartTime = 0
-                
-                if DEBUG_MODE then
-                    lblDebug.Text = "Debug: WEBHOOK SENT | Waiting for reset..."
-                end
             end
         end
     else
