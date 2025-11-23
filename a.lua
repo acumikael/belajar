@@ -22,7 +22,7 @@ local TweenService = game:GetService("TweenService")
 -- CONFIG
 ---------------------------------------------------------
 
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1417836981353713684/yPh7jTLDmX7n_rj2-KOanHl6iPGDlvUpHJeCZG90pFOG0NQrwQ6c_e94_tOFRRJ6_sYJ"
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1442130886211539015/dFtTF5AfrEQKJo75PzNZf5D-edsZ4egFctxrx3kshGXwLKDnkAu7lr-X2S2dKaS0Il-X"
 local DEFAULT_TARGET = 13
 local DEFAULT_BIG_EGG_THRESHOLD = 3
 local DEBUG_MODE = false  -- Default off, bisa toggle via GUI
