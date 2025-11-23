@@ -1,5 +1,5 @@
 --[[
-    GARDEN TRACKER V0.4 (TOGGLE UI + LUCKY EGG BACK)
+    EGG TRACKER V0.4 (TOGGLE UI + LUCKY EGG BACK)
     New Features:
     - Toggle button di kiri tengah untuk buka/tutup GUI
     - Lucky Egg Back detection dengan countdown 25 detik
@@ -24,7 +24,7 @@ local TweenService = game:GetService("TweenService")
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1417836981353713684/yPh7jTLDmX7n_rj2-KOanHl6iPGDlvUpHJeCZG90pFOG0NQrwQ6c_e94_tOFRRJ6_sYJ"
 local DEFAULT_TARGET = 13
 local DEFAULT_BIG_EGG_THRESHOLD = 3
-local DEBUG_MODE = true  -- Set false untuk disable debug
+local DEBUG_MODE = false  -- Default off, bisa toggle via GUI
 
 ---------------------------------------------------------
 -- HELPER: SAFE HTTP REQUEST
@@ -74,6 +74,10 @@ local initialEggCount = 0
 local luckyEggBackCount = 0
 local COUNTDOWN_SECONDS = 25
 
+-- Snapshot data saat countdown dimulai
+local snapshotNormalEggs = {}
+local snapshotBigEggs = {}
+
 local function makeBigEggKey(eggName, petName, kg)
     return string.format("%s|%s|%.1f", eggName, petName, kg)
 end
@@ -82,8 +86,8 @@ end
 -- CLEANUP GUI EXISTING
 ---------------------------------------------------------
 
-if player.PlayerGui:FindFirstChild("GardenUltimate") then
-    player.PlayerGui.GardenUltimate:Destroy()
+if player.PlayerGui:FindFirstChild("EggTracker") then
+    player.PlayerGui.EggTracker:Destroy()
 end
 
 ---------------------------------------------------------
@@ -91,18 +95,18 @@ end
 ---------------------------------------------------------
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "GardenUltimate"
+screenGui.Name = "EggTracker"
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Parent = screenGui
 toggleButton.AnchorPoint = Vector2.new(0, 0.5)
-toggleButton.Position = UDim2.new(0, 10, 0.5, 0)
+toggleButton.Position = UDim2.new(0, 10, 0.2, 0)
 toggleButton.Size = UDim2.new(0, 50, 0, 50)
 toggleButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 toggleButton.BorderSizePixel = 0
-toggleButton.Text = "🌱"
+toggleButton.Text = "🐐"
 toggleButton.TextSize = 24
 toggleButton.Font = Enum.Font.GothamBold
 
@@ -149,7 +153,7 @@ local title = Instance.new("TextLabel")
 title.Parent = mainFrame
 title.Size = UDim2.new(1, 0, 0, 32)
 title.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-title.Text = "Garden Tracker V0.4"
+title.Text = "Egg Tracker V0.4"
 title.TextColor3 = Color3.fromRGB(235, 235, 235)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -175,6 +179,24 @@ closeBtn.TextSize = 14
 local closeCorner = Instance.new("UICorner")
 closeCorner.CornerRadius = UDim.new(1,0)
 closeCorner.Parent = closeBtn
+
+---------------------------------------------------------
+-- DEBUG TOGGLE BUTTON
+---------------------------------------------------------
+
+local debugToggleBtn = Instance.new("TextButton")
+debugToggleBtn.Parent = mainFrame
+debugToggleBtn.Size = UDim2.new(0, 20, 0, 20)
+debugToggleBtn.Position = UDim2.new(1, -50, 0, 6)
+debugToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+debugToggleBtn.Text = "🐛"
+debugToggleBtn.TextColor3 = Color3.new(1,1,1)
+debugToggleBtn.Font = Enum.Font.GothamBold
+debugToggleBtn.TextSize = 12
+
+local debugCorner = Instance.new("UICorner")
+debugCorner.CornerRadius = UDim.new(1,0)
+debugCorner.Parent = debugToggleBtn
 
 ---------------------------------------------------------
 -- TARGET INPUT
@@ -288,6 +310,7 @@ lblStatus.TextColor3 = Color3.fromRGB(255, 230, 120)
 local lblDebug = makeLabel("Debug: -", 80)
 lblDebug.TextColor3 = Color3.fromRGB(100, 200, 255)
 lblDebug.TextSize = 10
+lblDebug.Visible = false  -- Hidden by default
 
 ---------------------------------------------------------
 -- RESULT LIST (SCROLLING)
@@ -379,7 +402,7 @@ local function toggleGui()
             mainFrame.Visible = false
         end)
         
-        toggleButton.Text = "🌱"
+        toggleButton.Text = "🐐"
     end
 end
 
@@ -463,14 +486,13 @@ local function buildResultList(normalEggs, bigEggs)
 end
 
 ---------------------------------------------------------
--- COUNT EGGS IN FARM (Menghitung SEMUA egg termasuk yang jadi timer)
+-- COUNT EGGS IN FARM (Menghitung HANYA yang jadi timer, EXCLUDE yang masih punya KG)
 ---------------------------------------------------------
 
 local lastDebugInfo = ""
 
 local function countEggsInFarm()
     local eggCount = 0
-    local eggWithKG = 0
     local eggWithTimer = 0
     local debugTexts = {}
     local searchRoot = workspace:FindFirstChild("Farm") or workspace
@@ -480,16 +502,10 @@ local function countEggsInFarm()
             local raw = obj.Text
             local cleanedText = cleanText(raw)
             
-            -- Hitung egg yang ada tulisan "Egg" 
-            if string.find(raw, "Egg") then
+            -- Hitung HANYA egg yang TIDAK punya KG (sudah jadi timer/lucky back)
+            if string.find(raw, "Egg") and not string.find(raw, "KG") then
                 eggCount = eggCount + 1
-                
-                -- Kategorikan: apakah masih punya KG atau sudah jadi timer
-                if string.find(raw, "KG") then
-                    eggWithKG = eggWithKG + 1
-                else
-                    eggWithTimer = eggWithTimer + 1
-                end
+                eggWithTimer = eggWithTimer + 1
                 
                 if DEBUG_MODE and #debugTexts < 3 then
                     table.insert(debugTexts, cleanedText:sub(1, 20))
@@ -499,7 +515,7 @@ local function countEggsInFarm()
     end
     
     if DEBUG_MODE then
-        lastDebugInfo = string.format("Total:%d (KG:%d, Timer:%d)", eggCount, eggWithKG, eggWithTimer)
+        lastDebugInfo = string.format("LuckyBack:%d (Timer only)", eggCount)
         if #debugTexts > 0 then
             lastDebugInfo = lastDebugInfo .. " | Ex: " .. table.concat(debugTexts, ", ")
         end
@@ -750,6 +766,17 @@ end)
 closeBtn.MouseButton1Click:Connect(function()
     isRunning = false
     if screenGui then screenGui:Destroy() end
+end)
+
+debugToggleBtn.MouseButton1Click:Connect(function()
+    DEBUG_MODE = not DEBUG_MODE
+    if DEBUG_MODE then
+        debugToggleBtn.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+        lblDebug.Visible = true
+    else
+        debugToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+        lblDebug.Visible = false
+    end
 end)
 
 ---------------------------------------------------------
