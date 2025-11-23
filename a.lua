@@ -155,7 +155,7 @@ local title = Instance.new("TextLabel")
 title.Parent = mainFrame
 title.Size = UDim2.new(1, 0, 0, 32)
 title.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-title.Text = "Egg Tracker V0.4"
+title.Text = "Egg Tracker V0.5"
 title.TextColor3 = Color3.fromRGB(235, 235, 235)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -575,7 +575,7 @@ local function sendWebhook(normalEggs, bigEggs, luckyBackCount)
                 {["name"] = "🥚 Total Hatched", ["value"] = tostring(totalHatched), ["inline"] = true},
                 {["name"] = "🍀 Lucky Egg Back", ["value"] = tostring(luckyBackCount), ["inline"] = true}
             },
-            ["footer"] = {["text"] = "kambingnoob"},
+            ["footer"] = {["text"] = "jawajawajawa"},
             ["timestamp"] = DateTime.now():ToIsoDate()
         }
     }
