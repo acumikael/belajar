@@ -23,9 +23,9 @@ local TweenService = game:GetService("TweenService")
 ---------------------------------------------------------
 
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1417836981353713684/yPh7jTLDmX7n_rj2-KOanHl6iPGDlvUpHJeCZG90pFOG0NQrwQ6c_e94_tOFRRJ6_sYJ"
-local DEFAULT_TARGET = 8
+local DEFAULT_TARGET = 13
 local DEFAULT_BIG_EGG_THRESHOLD = 3
-local TIMER_WAIT_SECONDS = 3
+local TIMER_WAIT_SECONDS = 4
 
 ---------------------------------------------------------
 -- HELPER: SAFE HTTP REQUEST
@@ -436,13 +436,23 @@ local function detectTimers()
     for _, obj in ipairs(searchRoot:GetDescendants()) do
         if obj:IsA("TextLabel") and obj.Visible == true then
             local text = cleanText(obj.Text)
-            -- Cek format timer:
-            -- Format menit:detik -> "01:23" atau "59:59"
-            -- Format jam:menit:detik -> "7:58:23" atau "12:34:56"
-            local hasMinuteFormat = string.match(text, "^%d+:%d+$")
-            local hasHourFormat = string.match(text, "^%d+:%d+:%d+$")
             
-            if (hasMinuteFormat or hasHourFormat) and not string.find(text, "KG") then
+            -- Cek format timer: 
+            -- Format menit:detik -> "00:30", "15:45"
+            -- Format jam:menit:detik -> "01:30:00", "2:15:30"
+            -- Pastikan tidak mengandung "KG" dan bukan angka biasa
+            local hasTimerFormat = false
+            
+            -- Cek format jam:menit:detik (contoh: 01:30:00, 2:15:45)
+            if string.match(text, "^%d+:%d+:%d+$") then
+                hasTimerFormat = true
+            -- Cek format menit:detik (contoh: 00:30, 15:45)
+            elseif string.match(text, "^%d+:%d+$") then
+                hasTimerFormat = true
+            end
+            
+            -- Pastikan bukan format KG atau text lain yang mengandung ":"
+            if hasTimerFormat and not string.find(text, "KG") and not string.find(text, "Egg") then
                 timerCount = timerCount + 1
             end
         end
@@ -581,8 +591,10 @@ local function scanGarden()
         if not isWaitingForTimer and not hasSentWebhook then
             -- Semua egg ready, mulai tunggu timer
             isWaitingForTimer = true
+            timerDetectedTime = 0
+            luckyEggBackCount = 0
             lblStatus.Text = "Status: Menunggu Timer..."
-        elseif isWaitingForTimer then
+        elseif isWaitingForTimer and not hasSentWebhook then
             -- Cek apakah sudah ada timer
             local timerCount = detectTimers()
             
@@ -592,12 +604,15 @@ local function scanGarden()
                     timerDetectedTime = tick()
                     luckyEggBackCount = timerCount
                     lblLuckyBack.Text = "Lucky Egg Back: " .. luckyEggBackCount
-                    lblStatus.Text = string.format("Status: Timer Detected! (%d) Wait 3s...", timerCount)
                 end
                 
                 -- Tunggu 3 detik setelah timer terdeteksi
                 local waitTime = tick() - timerDetectedTime
-                if waitTime >= TIMER_WAIT_SECONDS then
+                local remainingTime = TIMER_WAIT_SECONDS - waitTime
+                
+                if remainingTime > 0 then
+                    lblStatus.Text = string.format("Status: Timer Detected! (%d) Wait %.1fs...", timerCount, remainingTime)
+                else
                     -- Kirim webhook setelah 3 detik
                     local dur = tick() - batchStartTime
                     if dur < 60 then lastBatchDuration = math.floor(dur) .. "s"
@@ -612,6 +627,9 @@ local function scanGarden()
                     isWaitingForTimer = false
                     timerDetectedTime = 0
                 end
+            else
+                -- Tidak ada timer terdeteksi, tampilkan status
+                lblStatus.Text = "Status: Menunggu Timer... (0 detected)"
             end
         end
     else
