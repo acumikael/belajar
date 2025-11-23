@@ -71,7 +71,7 @@ local isWaitingForCount = false
 local countdownStartTime = 0
 local initialEggCount = 0
 local luckyEggBackCount = 0
-local COUNTDOWN_SECONDS = 25
+local COUNTDOWN_SECONDS = 20
 
 local function makeBigEggKey(eggName, petName, kg)
     return string.format("%s|%s|%.1f", eggName, petName, kg)
@@ -97,7 +97,7 @@ local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Parent = screenGui
 toggleButton.AnchorPoint = Vector2.new(0, 0.5)
-toggleButton.Position = UDim2.new(0, 10, 0.2, 0)
+toggleButton.Position = UDim2.new(0, 10, 0.5, 0)
 toggleButton.Size = UDim2.new(0, 50, 0, 50)
 toggleButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 toggleButton.BorderSizePixel = 0
@@ -603,7 +603,7 @@ local function scanGarden()
                 if dur < 60 then lastBatchDuration = math.floor(dur) .. "s"
                 else lastBatchDuration = math.floor(dur / 60) .. "m " .. math.floor(dur % 60) .. "s" end
                 
-                totalHatched += totalReady
+                totalHatched += initialEggCount  -- Pakai initialEggCount bukan totalReady
                 lblLastBatch.Text = "Last Batch Time: " .. lastBatchDuration
                 lblHatched.Text = "Total Hatched: " .. totalHatched
                 
@@ -614,8 +614,8 @@ local function scanGarden()
             end
         end
     else
-        -- Reset jika jumlah egg turun drastis (sudah dibuka)
-        if hasSentWebhook and totalReady < (target / 2) then
+        -- Reset jika egg berkurang (sudah di-hatch atau countdown selesai)
+        if (hasSentWebhook or isWaitingForCount) and totalReady < target then
             hasSentWebhook = false
             isWaitingForCount = false
             countdownStartTime = 0
