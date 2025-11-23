@@ -24,6 +24,7 @@ local TweenService = game:GetService("TweenService")
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1417836981353713684/yPh7jTLDmX7n_rj2-KOanHl6iPGDlvUpHJeCZG90pFOG0NQrwQ6c_e94_tOFRRJ6_sYJ"
 local DEFAULT_TARGET = 13
 local DEFAULT_BIG_EGG_THRESHOLD = 3
+local DEBUG_MODE = true  -- Set false untuk disable debug
 
 ---------------------------------------------------------
 -- HELPER: SAFE HTTP REQUEST
@@ -71,7 +72,7 @@ local isWaitingForCount = false
 local countdownStartTime = 0
 local initialEggCount = 0
 local luckyEggBackCount = 0
-local COUNTDOWN_SECONDS = 23
+local COUNTDOWN_SECONDS = 25
 
 local function makeBigEggKey(eggName, petName, kg)
     return string.format("%s|%s|%.1f", eggName, petName, kg)
@@ -101,7 +102,7 @@ toggleButton.Position = UDim2.new(0, 10, 0.5, 0)
 toggleButton.Size = UDim2.new(0, 50, 0, 50)
 toggleButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 toggleButton.BorderSizePixel = 0
-toggleButton.Text = "🐐"
+toggleButton.Text = "69"
 toggleButton.TextSize = 24
 toggleButton.Font = Enum.Font.GothamBold
 
@@ -260,7 +261,7 @@ toggleBtnCorner.Parent = toggleBtn
 local statsContainer = Instance.new("Frame")
 statsContainer.Parent = mainFrame
 statsContainer.Position = UDim2.new(0, 12, 0, 142)
-statsContainer.Size = UDim2.new(1, -24, 0, 86)
+statsContainer.Size = UDim2.new(1, -24, 0, 102)
 statsContainer.BackgroundTransparency = 1
 
 local function makeLabel(txt, y)
@@ -284,6 +285,9 @@ local lblLuckyBack = makeLabel("Lucky Egg Back: 0", 48)
 lblLuckyBack.TextColor3 = Color3.fromRGB(255, 200, 80)
 local lblStatus = makeLabel("Status: IDLE", 64)
 lblStatus.TextColor3 = Color3.fromRGB(255, 230, 120)
+local lblDebug = makeLabel("Debug: -", 80)
+lblDebug.TextColor3 = Color3.fromRGB(100, 200, 255)
+lblDebug.TextSize = 10
 
 ---------------------------------------------------------
 -- RESULT LIST (SCROLLING)
@@ -291,8 +295,8 @@ lblStatus.TextColor3 = Color3.fromRGB(255, 230, 120)
 
 local scrollList = Instance.new("ScrollingFrame")
 scrollList.Parent = mainFrame
-scrollList.Position = UDim2.new(0, 12, 0, 236)
-scrollList.Size = UDim2.new(1, -24, 1, -248)
+scrollList.Position = UDim2.new(0, 12, 0, 252)
+scrollList.Size = UDim2.new(1, -24, 1, -264)
 scrollList.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
 scrollList.CanvasSize = UDim2.new(0, 0, 0, 0)
 scrollList.ScrollBarThickness = 4
@@ -429,8 +433,11 @@ end
 -- COUNT EGGS IN FARM (Sama seperti scan logic, hanya hitung "Egg")
 ---------------------------------------------------------
 
+local lastDebugInfo = ""
+
 local function countEggsInFarm()
     local eggCount = 0
+    local debugTexts = {}
     local searchRoot = workspace:FindFirstChild("Farm") or workspace
     
     for _, obj in ipairs(searchRoot:GetDescendants()) do
@@ -439,7 +446,17 @@ local function countEggsInFarm()
             -- Hitung hanya yang ada tulisan "Egg" (tidak peduli KG atau timer)
             if string.find(raw, "Egg") then
                 eggCount = eggCount + 1
+                if DEBUG_MODE and #debugTexts < 5 then
+                    table.insert(debugTexts, raw)
+                end
             end
+        end
+    end
+    
+    if DEBUG_MODE then
+        lastDebugInfo = "Eggs found: " .. eggCount
+        if #debugTexts > 0 then
+            lastDebugInfo = lastDebugInfo .. " | Samples: " .. table.concat(debugTexts, ", ")
         end
     end
     
@@ -571,6 +588,12 @@ local function scanGarden()
     local lineCount = select(2, listStr:gsub("\n", "\n"))
     scrollList.CanvasSize = UDim2.new(0, 0, 0, math.max(lineCount * 18 + 12, scrollList.AbsoluteWindowSize.Y))
 
+    -- Update debug info
+    if DEBUG_MODE then
+        lblDebug.Text = string.format("Debug: Ready=%d | Target=%d | Waiting=%s | Sent=%s", 
+            totalReady, target, tostring(isWaitingForCount), tostring(hasSentWebhook))
+    end
+
     -- LOGIC BARU: Lucky Egg Back Detection (25 detik countdown)
     if totalReady >= target then
         if not isWaitingForCount and not hasSentWebhook then
@@ -580,6 +603,9 @@ local function scanGarden()
             initialEggCount = totalReady
             luckyEggBackCount = 0
             lblStatus.Text = "Status: Countdown 25s dimulai..."
+            if DEBUG_MODE then
+                lblDebug.Text = string.format("Debug: START COUNTDOWN | Initial=%d eggs", initialEggCount)
+            end
         elseif isWaitingForCount and not hasSentWebhook then
             -- Hitung sisa waktu countdown
             local elapsed = tick() - countdownStartTime
@@ -597,6 +623,10 @@ local function scanGarden()
                 
                 lblLuckyBack.Text = "Lucky Egg Back: " .. luckyEggBackCount
                 lblStatus.Text = string.format("Status: Lucky Egg Back = %d eggs", luckyEggBackCount)
+                
+                if DEBUG_MODE then
+                    lblDebug.Text = string.format("Debug: COUNTDOWN END | %s", lastDebugInfo)
+                end
                 
                 -- Kirim webhook
                 local dur = tick() - batchStartTime
@@ -616,6 +646,9 @@ local function scanGarden()
     else
         -- Reset jika egg berkurang (sudah di-hatch atau countdown selesai)
         if (hasSentWebhook or isWaitingForCount) and totalReady < target then
+            if DEBUG_MODE then
+                lblDebug.Text = string.format("Debug: RESET | Ready=%d < Target=%d", totalReady, target)
+            end
             hasSentWebhook = false
             isWaitingForCount = false
             countdownStartTime = 0
