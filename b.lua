@@ -71,7 +71,7 @@ local isWaitingForCount = false
 local countdownStartTime = 0
 local initialEggCount = 0
 local luckyEggBackCount = 0
-local COUNTDOWN_SECONDS = 20
+local COUNTDOWN_SECONDS = 23
 
 local function makeBigEggKey(eggName, petName, kg)
     return string.format("%s|%s|%.1f", eggName, petName, kg)
@@ -101,7 +101,7 @@ toggleButton.Position = UDim2.new(0, 10, 0.5, 0)
 toggleButton.Size = UDim2.new(0, 50, 0, 50)
 toggleButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 toggleButton.BorderSizePixel = 0
-toggleButton.Text = "🌱"
+toggleButton.Text = "🐐"
 toggleButton.TextSize = 24
 toggleButton.Font = Enum.Font.GothamBold
 
@@ -426,7 +426,7 @@ local function buildResultList(normalEggs, bigEggs)
 end
 
 ---------------------------------------------------------
--- COUNT EGGS IN FARM
+-- COUNT EGGS IN FARM (Sama seperti scan logic, hanya hitung "Egg")
 ---------------------------------------------------------
 
 local function countEggsInFarm()
@@ -436,8 +436,8 @@ local function countEggsInFarm()
     for _, obj in ipairs(searchRoot:GetDescendants()) do
         if obj:IsA("TextLabel") and obj.Visible == true then
             local raw = obj.Text
-            -- Hitung semua egg (baik yang KG maupun timer)
-            if string.find(raw, "Egg") or string.find(raw, "KG") or string.match(raw, "%d+:%d+") then
+            -- Hitung hanya yang ada tulisan "Egg" (tidak peduli KG atau timer)
+            if string.find(raw, "Egg") then
                 eggCount = eggCount + 1
             end
         end
