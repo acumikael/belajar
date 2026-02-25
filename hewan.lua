@@ -55,15 +55,14 @@ local function updateCount(backpack)
 
     elseif MODE == "fruits" then
         -- Hitung total KG semua Fruits
-        local totalKG = 0
+        local totalFruit = 0
         for _, item in ipairs(backpack:GetChildren()) do
             local kg = string.match(item.Name, "%(([%d%.]+) KG%)")
             if kg then
-                totalKG = totalKG + 1
+                totalFruit = totalFruit + 1
             end
         end
-        -- Tampilkan dengan 2 desimal
-        displayLabel.Text = string.format("Total: %.2f KG", totalKG)
+        displayLabel.Text = "Total Fruits: " .. totalFruit
     end
 end
 
