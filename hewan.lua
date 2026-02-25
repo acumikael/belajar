@@ -59,7 +59,7 @@ local function updateCount(backpack)
         for _, item in ipairs(backpack:GetChildren()) do
             local kg = string.match(item.Name, "%(([%d%.]+) KG%)")
             if kg then
-                totalKG = totalKG + tonumber(kg)
+                totalKG = totalKG + 1
             end
         end
         -- Tampilkan dengan 2 desimal
