@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
 -- MODE: "pets" atau "fruits"
-local MODE = "pets" -- <-- GANTI DI SINI
+local MODE = "fruits" -- <-- GANTI DI SINI
 
 -- ======================================================
 
